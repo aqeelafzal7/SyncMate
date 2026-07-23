@@ -1,0 +1,10 @@
+{
+  "name": "SyncMate",
+  "description": "Your Autonomous AI Secretary with Chat-Based Onboarding and Intelligent Profile Scheduling",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
