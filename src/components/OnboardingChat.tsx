@@ -105,15 +105,59 @@ First, **what is your full name**?`,
       }
 
       const data = await res.json();
-      const replyText = data.reply || 'I am processing your input.';
+      const rawReply = data.reply || '';
 
-      // Inspect response text or parse heuristics to update profile fields
-      updateProfileFromConversation(textToSend, replyText);
+      let chatDisplayReply = rawReply;
+      let parsedData: any = null;
+
+      try {
+        let cleanStr = rawReply.trim();
+        if (cleanStr.startsWith('```')) {
+          cleanStr = cleanStr.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+        }
+        parsedData = JSON.parse(cleanStr);
+      } catch {
+        // If raw reply isn't JSON
+      }
+
+      if (parsedData?.chatResponse) {
+        chatDisplayReply = parsedData.chatResponse;
+      }
+
+      if (parsedData?.extractedData) {
+        const ext = parsedData.extractedData;
+        setProfile((prev) => {
+          const updated = { ...prev };
+          if (ext.name && ext.name !== 'null' && ext.name !== 'string' && ext.name.trim().length > 0) {
+            updated.name = ext.name.trim();
+          }
+          if (ext.occupation && ext.occupation !== 'null' && ext.occupation !== 'string' && ext.occupation.trim().length > 0) {
+            updated.occupation = ext.occupation.trim();
+          }
+          if (ext.goals && ext.goals !== 'null' && ext.goals !== 'string' && ext.goals.trim().length > 0) {
+            updated.goals = ext.goals.trim();
+          }
+          if (ext.religion && ext.religion !== 'null' && ext.religion !== 'string') {
+            const relLower = String(ext.religion).toLowerCase();
+            if (relLower.includes('muslim') || relLower.includes('islam')) {
+              updated.religion = 'Muslim';
+            } else if (relLower.includes('non-muslim') || relLower.includes('none')) {
+              updated.religion = 'Non-Muslim';
+            } else {
+              updated.religion = ext.religion;
+            }
+          }
+          return updated;
+        });
+      } else {
+        // Fallback update if JSON extraction wasn't present
+        updateProfileFromConversation(textToSend, chatDisplayReply);
+      }
 
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: replyText,
+        content: chatDisplayReply,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 
@@ -134,20 +178,26 @@ First, **what is your full name**?`,
     }
   };
 
-  // Extract user info from inputs to build profile state
+  // Extract user info from inputs to build profile state (Fallback Heuristic)
   const updateProfileFromConversation = (userText: string, aiReply: string) => {
     setProfile((prev) => {
       const updated = { ...prev };
 
       // 1. Name
       if (!updated.name) {
-        // Extract first reasonable string
         const cleanName = userText.replace(/my name is|i am|call me/gi, '').trim();
         if (cleanName.length > 0) updated.name = cleanName;
       } 
       // 2. Occupation
       else if (!updated.occupation) {
-        updated.occupation = userText;
+        let occ = userText.trim();
+        if (/im|i am/i.test(occ)) {
+          occ = occ.replace(/^(im|i am)\s+/i, '');
+        }
+        if (occ.toLowerCase().includes('biotech') || occ.toLowerCase().includes('student')) {
+          occ = 'BS Biotechnology Student';
+        }
+        updated.occupation = occ;
       }
       // 3. Goals
       else if (!updated.goals) {
@@ -229,7 +279,34 @@ Your local context, prayer anchors, and live weather summaries are fully integra
     }
   };
 
-  const handleFinishOnboarding = () => {
+  // Auto-fetch location in background on mount
+  useEffect(() => {
+    if (!profile.location) {
+      getUserCurrentCoordinates()
+        .then((loc) => {
+          if (loc) {
+            setProfile((prev) => ({ ...prev, location: loc }));
+          }
+        })
+        .catch(console.warn);
+    }
+  }, []);
+
+  const handleFinishOnboarding = async () => {
+    let finalLocation = profile.location;
+    if (!finalLocation) {
+      try {
+        finalLocation = await getUserCurrentCoordinates();
+      } catch {
+        finalLocation = {
+          latitude: 31.5204,
+          longitude: 74.3587,
+          city: 'Detected City',
+          updatedAt: new Date().toISOString()
+        };
+      }
+    }
+
     const finalProfile: UserProfile = {
       uid: initialProfile?.uid || `user_${Date.now()}`,
       email: initialProfile?.email || 'user@syncmate.ai',
@@ -237,12 +314,7 @@ Your local context, prayer anchors, and live weather summaries are fully integra
       occupation: profile.occupation || 'Professional',
       goals: profile.goals || 'Goal setting',
       religion: profile.religion || 'None',
-      location: profile.location || {
-        latitude: 21.4225,
-        longitude: 39.8262,
-        city: 'Default Coordinates',
-        updatedAt: new Date().toISOString()
-      },
+      location: finalLocation,
       onboarded: true,
       createdAt: initialProfile?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()

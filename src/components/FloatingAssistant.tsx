@@ -258,8 +258,24 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
         }
       }
 
-      // Clean display text without raw json_action block
-      const cleanReply = replyText.replace(/```json_action\s*[\s\S]*?```/g, '').trim();
+      // Parse potential json_mood block for emotional sentiment tracking
+      const moodMatch = replyText.match(/```json_mood\s*([\s\S]*?)\s*```/);
+      if (moodMatch && moodMatch[1]) {
+        try {
+          const moodObj = JSON.parse(moodMatch[1]);
+          if (moodObj.detectedMood) {
+            localStorage.setItem('syncmate_current_mood', moodObj.detectedMood);
+          }
+        } catch (e) {
+          console.warn('Failed to parse json_mood:', e);
+        }
+      }
+
+      // Clean display text without raw json_action or json_mood blocks
+      const cleanReply = replyText
+        .replace(/```json_action\s*[\s\S]*?```/g, '')
+        .replace(/```json_mood\s*[\s\S]*?```/g, '')
+        .trim();
 
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),

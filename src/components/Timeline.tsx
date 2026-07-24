@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, Task, PrayerTimings, WeatherData } from '../types';
 import { getDangerousHabitStreaks } from '../lib/habitService';
+import { IslamicInsightModal } from './IslamicInsightModal';
 
 interface TimelineProps {
   userProfile: UserProfile;
@@ -91,6 +92,46 @@ export const Timeline: React.FC<TimelineProps> = ({
 
   // Dangerous Habits Check
   const dangerousStreaks = getDangerousHabitStreaks();
+
+  // Completed Prayers State (persisted in localStorage by date_prayerKey)
+  const [completedPrayers, setCompletedPrayers] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('syncmate_completed_prayers');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Islamic Insight Modal State
+  const [islamicModal, setIslamicModal] = useState<{
+    isOpen: boolean;
+    prayerName: string;
+  }>({
+    isOpen: false,
+    prayerName: ''
+  });
+
+  const handleTogglePrayerComplete = (prayerKey: string, prayerName: string) => {
+    const itemKey = `${selectedDate}_${prayerKey}`;
+    const currentlyCompleted = Boolean(completedPrayers[itemKey]);
+    const nextState = !currentlyCompleted;
+
+    const updated = {
+      ...completedPrayers,
+      [itemKey]: nextState
+    };
+    setCompletedPrayers(updated);
+    localStorage.setItem('syncmate_completed_prayers', JSON.stringify(updated));
+
+    // If marked as complete, open Quran & Hadith Reward Modal!
+    if (nextState) {
+      setIslamicModal({
+        isOpen: true,
+        prayerName
+      });
+    }
+  };
 
   // Manual Prayer Overrides state (persisted in localStorage)
   const [customPrayerTimes, setCustomPrayerTimes] = useState<Record<string, string>>(() => {
@@ -474,57 +515,89 @@ export const Timeline: React.FC<TimelineProps> = ({
                   <div className="flex-1 space-y-3 pb-4 border-b border-slate-100 dark:border-slate-800/60">
                     
                     {/* Fixed Prayer Anchor Block (if Muslim & prayer time) */}
-                    {prayerAnchor && (
-                      <div className={`p-4 rounded-2xl bg-gradient-to-r ${prayerAnchor.bg} border text-white shadow-lg relative overflow-hidden`}>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div className="flex items-center space-x-3">
-                            <div className="p-2 rounded-xl bg-white/10 backdrop-blur-md">
-                              <prayerAnchor.icon className="w-5 h-5 text-amber-300 animate-pulse" />
-                            </div>
-                            <div>
-                              <div className="flex items-center space-x-2 flex-wrap gap-1">
-                                <h3 className="font-bold text-sm tracking-wide text-white">
-                                  {prayerAnchor.name}
-                                </h3>
-                                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30 flex items-center space-x-1">
-                                  <Lock className="w-2.5 h-2.5" />
-                                  <span>Fixed Anchor</span>
-                                </span>
-                                {prayerAnchor.isCustom && (
-                                  <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
-                                    Mosque Jamat Custom
-                                  </span>
+                    {prayerAnchor && (() => {
+                      const prayerItemKey = `${selectedDate}_${prayerAnchor.key}`;
+                      const isPrayerDone = Boolean(completedPrayers[prayerItemKey]);
+
+                      return (
+                        <div className={`p-4 rounded-2xl bg-gradient-to-r ${isPrayerDone ? 'from-emerald-950 via-teal-950 to-slate-900 border-emerald-400/80 shadow-lg shadow-emerald-950/40 ring-2 ring-emerald-500/30' : prayerAnchor.bg} border text-white shadow-lg relative overflow-hidden transition-all duration-300`}>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center space-x-3">
+                              <div className={`p-2.5 rounded-xl ${isPrayerDone ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-white/10 backdrop-blur-md text-amber-300'}`}>
+                                {isPrayerDone ? (
+                                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                                ) : (
+                                  <prayerAnchor.icon className="w-5 h-5 text-amber-300 animate-pulse" />
                                 )}
                               </div>
-                              <p className="text-xs text-slate-200 mt-0.5">
-                                Spiritual schedule anchor strictly reserved around {prayerAnchor.time}
-                              </p>
+                              <div>
+                                <div className="flex items-center space-x-2 flex-wrap gap-1.5">
+                                  <h3 className={`font-bold text-sm tracking-wide ${isPrayerDone ? 'text-emerald-200 line-through' : 'text-white'}`}>
+                                    {prayerAnchor.name}
+                                  </h3>
+                                  
+                                  {isPrayerDone ? (
+                                    <span className="px-2.5 py-0.5 text-[10px] font-extrabold rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/50 flex items-center space-x-1 shadow-sm">
+                                      <Check className="w-3 h-3 text-emerald-300" />
+                                      <span>Offered / Complete</span>
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30 flex items-center space-x-1">
+                                      <Lock className="w-2.5 h-2.5" />
+                                      <span>Fixed Anchor</span>
+                                    </span>
+                                  )}
+
+                                  {prayerAnchor.isCustom && (
+                                    <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
+                                      Mosque Jamat Custom
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-slate-200 mt-0.5">
+                                  {isPrayerDone ? 'May Allah accept your prayer and devotion.' : `Spiritual schedule anchor strictly reserved around ${prayerAnchor.time}`}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center space-x-2.5 self-end sm:self-auto flex-wrap gap-2">
+                              {/* Mark Complete Button */}
+                              <button
+                                onClick={() => handleTogglePrayerComplete(prayerAnchor.key, prayerAnchor.name)}
+                                className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold shadow-md transition-all flex items-center space-x-1.5 ${
+                                  isPrayerDone
+                                    ? 'bg-emerald-800/60 hover:bg-emerald-700/60 text-emerald-200 border border-emerald-500/40'
+                                    : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black shadow-emerald-500/30 hover:scale-105 active:scale-95'
+                                }`}
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>{isPrayerDone ? '✓ Offered' : '✅ Mark Complete'}</span>
+                              </button>
+
+                              <span className="font-mono text-xs font-bold px-2.5 py-1 bg-black/40 rounded-xl border border-white/15">
+                                {prayerAnchor.time}
+                              </span>
+
+                              <button
+                                onClick={() => {
+                                  setEditingPrayer({
+                                    name: prayerAnchor.name,
+                                    key: prayerAnchor.key,
+                                    time: prayerAnchor.time,
+                                  });
+                                  setEditTimeValue(prayerAnchor.time);
+                                }}
+                                className="px-2.5 py-1 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold border border-white/20 transition-all flex items-center space-x-1"
+                                title="Edit exact mosque jamat time"
+                              >
+                                <Edit2 className="w-3 h-3 text-amber-300" />
+                                <span>Edit</span>
+                              </button>
                             </div>
                           </div>
-
-                          <div className="flex items-center space-x-2 self-end sm:self-auto">
-                            <span className="font-mono text-xs font-bold px-3 py-1 bg-black/40 rounded-xl border border-white/15">
-                              {prayerAnchor.time}
-                            </span>
-                            <button
-                              onClick={() => {
-                                setEditingPrayer({
-                                  name: prayerAnchor.name,
-                                  key: prayerAnchor.key,
-                                  time: prayerAnchor.time,
-                                });
-                                setEditTimeValue(prayerAnchor.time);
-                              }}
-                              className="px-2.5 py-1 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold border border-white/20 transition-all flex items-center space-x-1"
-                              title="Edit exact mosque jamat time"
-                            >
-                              <Edit2 className="w-3 h-3 text-amber-300" />
-                              <span>Edit</span>
-                            </button>
-                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Task Cards in this slot */}
                     {hourTasks.map((t) => {
@@ -644,6 +717,13 @@ export const Timeline: React.FC<TimelineProps> = ({
 
         </div>
       </div>
+
+      {/* Islamic Knowledge Reward Modal (Quran & Hadith Popups) */}
+      <IslamicInsightModal
+        prayerName={islamicModal.prayerName}
+        isOpen={islamicModal.isOpen}
+        onClose={() => setIslamicModal({ isOpen: false, prayerName: '' })}
+      />
 
     </div>
   );

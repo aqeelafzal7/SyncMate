@@ -5,12 +5,35 @@ const DEFAULT_LAT = 21.4225;
 const DEFAULT_LNG = 39.8262;
 
 /**
- * IP-based geolocation fallback using free endpoints
+ * IP-based geolocation fallback using free endpoints (ipwho.is, ipapi.co, ip-api.com)
  */
-async function getLocationFromIP(): Promise<UserLocation | null> {
-  // Try ipapi.co
+export async function getLocationFromIP(): Promise<UserLocation | null> {
+  // Try ipwho.is first (fast & reliable)
   try {
-    const res = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(4000) });
+    const res = await fetch('https://ipwho.is/', { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.latitude && data.longitude) {
+        const cityParts = [];
+        if (data.city) cityParts.push(data.city);
+        if (data.country) cityParts.push(data.country);
+        const cityName = cityParts.length > 0 ? cityParts.join(', ') : 'IP Location';
+
+        return {
+          latitude: data.latitude,
+          longitude: data.longitude,
+          city: cityName,
+          updatedAt: new Date().toISOString()
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('ipwho.is failed, trying ipapi.co:', err);
+  }
+
+  // Fallback 1: ipapi.co
+  try {
+    const res = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(3000) });
     if (res.ok) {
       const data = await res.json();
       if (data.latitude && data.longitude) {
@@ -31,9 +54,9 @@ async function getLocationFromIP(): Promise<UserLocation | null> {
     console.warn('ipapi.co failed, trying ip-api.com:', err);
   }
 
-  // Secondary fallback: ip-api.com
+  // Fallback 2: ip-api.com
   try {
-    const res = await fetch('https://ip-api.com/json/?fields=status,country,city,lat,lon', { signal: AbortSignal.timeout(4000) });
+    const res = await fetch('https://ip-api.com/json/?fields=status,country,city,lat,lon', { signal: AbortSignal.timeout(3000) });
     if (res.ok) {
       const data = await res.json();
       if (data.status === 'success' && data.lat && data.lon) {
@@ -58,43 +81,48 @@ async function getLocationFromIP(): Promise<UserLocation | null> {
 }
 
 /**
- * Dual-Location Engine: Primary Browser GPS -> Fallback IP Geolocation -> Graceful Default
+ * Dual-Location Engine with Aggressive 3-Second Timeout & Instant Background IP Fetching
  */
 export async function getUserCurrentCoordinates(): Promise<UserLocation> {
-  return new Promise((resolve) => {
-    if (!('geolocation' in navigator)) {
-      getLocationFromIP().then((ipLoc) => {
-        resolve(ipLoc || {
-          latitude: DEFAULT_LAT,
-          longitude: DEFAULT_LNG,
-          city: 'Mecca (Default)',
-          updatedAt: new Date().toISOString()
-        });
-      });
-      return;
-    }
+  // Start background IP location fetch IMMEDIATELY
+  const ipLocationPromise = getLocationFromIP();
 
+  return new Promise((resolve) => {
     let resolved = false;
 
-    // Set a safety timeout to trigger IP fallback quickly if GPS hangs
-    const safetyTimer = setTimeout(async () => {
-      if (!resolved) {
-        resolved = true;
-        console.warn('Geolocation timed out, switching to IP location...');
-        const ipLoc = await getLocationFromIP();
-        resolve(ipLoc || {
-          latitude: DEFAULT_LAT,
-          longitude: DEFAULT_LNG,
-          city: 'Mecca (Default)',
+    // Helper to resolve with IP location or graceful fallback
+    const resolveWithIP = async () => {
+      if (resolved) return;
+      resolved = true;
+      const ipLoc = await ipLocationPromise;
+      if (ipLoc) {
+        resolve(ipLoc);
+      } else {
+        resolve({
+          latitude: 31.5204,
+          longitude: 74.3587,
+          city: 'Detected Location',
           updatedAt: new Date().toISOString()
         });
       }
-    }, 5000);
+    };
+
+    if (!('geolocation' in navigator)) {
+      resolveWithIP();
+      return;
+    }
+
+    // Aggressive 3-second timeout for browser GPS
+    const safetyTimer = setTimeout(() => {
+      if (!resolved) {
+        console.warn('Browser GPS timed out after 3s, forcing IP-based location fallback.');
+        resolveWithIP();
+      }
+    }, 3000);
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         if (resolved) return;
-        resolved = true;
         clearTimeout(safetyTimer);
 
         const lat = position.coords.latitude;
@@ -103,7 +131,10 @@ export async function getUserCurrentCoordinates(): Promise<UserLocation> {
         
         try {
           // Reverse geocoding
-          const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`, { signal: AbortSignal.timeout(3000) });
+          const res = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`, 
+            { signal: AbortSignal.timeout(2500) }
+          );
           if (res.ok) {
             const geoData = await res.json();
             const city = geoData.city || geoData.locality || geoData.principalSubdivision;
@@ -113,9 +144,13 @@ export async function getUserCurrentCoordinates(): Promise<UserLocation> {
             }
           }
         } catch {
-          // Ignore reverse geocode failure
+          const ipLoc = await ipLocationPromise;
+          if (ipLoc?.city && !ipLoc.city.includes('Default')) {
+            cityName = ipLoc.city;
+          }
         }
 
+        resolved = true;
         resolve({
           latitude: lat,
           longitude: lng,
@@ -123,21 +158,13 @@ export async function getUserCurrentCoordinates(): Promise<UserLocation> {
           updatedAt: new Date().toISOString()
         });
       },
-      async (error) => {
+      (error) => {
         if (resolved) return;
-        resolved = true;
         clearTimeout(safetyTimer);
-
         console.warn('Geolocation permission denied or error:', error.message);
-        const ipLoc = await getLocationFromIP();
-        resolve(ipLoc || {
-          latitude: DEFAULT_LAT,
-          longitude: DEFAULT_LNG,
-          city: 'Mecca (Default)',
-          updatedAt: new Date().toISOString()
-        });
+        resolveWithIP();
       },
-      { timeout: 4500, enableHighAccuracy: true }
+      { timeout: 3000, enableHighAccuracy: false }
     );
   });
 }

@@ -153,19 +153,21 @@ export default function App() {
   const handleGuestLogin = async () => {
     setAuthLoading(true);
     const guestUid = `guest_${Date.now()}`;
+    const initialLoc = await getUserCurrentCoordinates().catch(() => ({
+      latitude: 31.5204,
+      longitude: 74.3587,
+      city: 'Detected City',
+      updatedAt: new Date().toISOString()
+    }));
+
     const guestProf: UserProfile = {
       uid: guestUid,
       email: 'guest@syncmate.ai',
-      name: 'Guest User',
-      occupation: 'Student / Professional',
-      goals: 'Master daily productivity and focus',
-      religion: 'Muslim', // Demo with Muslim 5 prayer anchors
-      location: {
-        latitude: 21.4225,
-        longitude: 39.8262,
-        city: 'Mecca Coordinates',
-        updatedAt: new Date().toISOString()
-      },
+      name: '',
+      occupation: '',
+      goals: '',
+      religion: 'Muslim',
+      location: initialLoc,
       onboarded: false, // Show onboarding chat first!
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()

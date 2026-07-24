@@ -158,6 +158,50 @@ Return a JSON object in this format inside a markdown \`\`\`json block:
         httpOptions: { headers }
       });
 
+      if (mode === 'onboarding') {
+        const { currentDraftProfile } = context || {};
+        const onboardingSystemInstruction = `You are the SyncMate onboarding assistant. You must extract profile data from the user's chat. 
+CRITICAL: You MUST respond ONLY with a valid JSON object. Do not use markdown blocks, just raw JSON.
+Format: 
+{
+  "chatResponse": "Your conversational reply asking the next question.",
+  "extractedData": {
+    "name": "string or null",
+    "occupation": "string or null",
+    "goals": "string or null",
+    "religion": "Muslim, Non-Muslim, or null"
+  }
+}
+
+Current Draft Profile Context:
+- Current Name: ${currentDraftProfile?.name || 'null'}
+- Current Occupation: ${currentDraftProfile?.occupation || 'null'}
+- Current Goals: ${currentDraftProfile?.goals || 'null'}
+- Current Religion: ${currentDraftProfile?.religion || 'null'}
+
+Rules:
+1. Extract any profile information mentioned or implied in the user's chat message (e.g., "im biotech bs student" -> occupation: "BS Biotechnology Student").
+2. Ask conversational, intelligent follow-up questions for missing fields in "chatResponse".
+3. Return ONLY a JSON object formatted strictly as specified above. Do not include markdown code block wrappers like \`\`\`json.`;
+
+        const formattedContents = (messages || []).map((m: any) => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content }]
+        }));
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.6-flash',
+          contents: formattedContents,
+          config: {
+            systemInstruction: onboardingSystemInstruction,
+            temperature: 0.3,
+          }
+        });
+
+        const text = response.text || '';
+        return res.json({ reply: text });
+      }
+
       if (mode === 'decompose_project') {
         const { project, existingTasks, prayerTimings } = context || {};
         const pacing = project?.pacingStrategy || 'balanced';
@@ -249,6 +293,39 @@ CRITICAL SCHEDULING & SAFETY RULES:
         return res.json({ reply: response.text || '' });
       }
 
+      if (mode === 'recommend_islamic_ref') {
+        const { currentMood, recentlyShown } = context || {};
+        const refSystemInstruction = `You are SyncMate's Islamic Reference Router.
+The user's current mood is "${currentMood || 'Neutral'}".
+Recommend one highly relevant Quranic Ayah and one relevant authentic Hadith theme that provides comfort, perspective, guidance, or shared joy matching their emotional state.
+
+CRITICAL RULES:
+1. You must NOT generate the text of the Ayah or Hadith! Zero text generation.
+2. You must ONLY return a JSON object with the exact Surah number (1 to 114) and Ayah number, a search keyword for the Hadith (e.g., "patience", "gratitude", "prayer", "trust", "hardship", "hope", "good_deeds"), and a short, comforting contextHeading explaining why this verse suits their current emotional mood.
+3. Avoid these recently shown Surah:Ayah combinations: ${JSON.stringify(recentlyShown || [])}.
+
+Output strictly a markdown JSON code block as follows:
+\`\`\`json
+{
+  "surah": 94,
+  "ayah": 5,
+  "hadithKeyword": "patience",
+  "contextHeading": "A reflection for moments when you feel overwhelmed or stressed"
+}
+\`\`\``;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.6-flash',
+          contents: [{ role: 'user', parts: [{ text: `Recommend Quran and Hadith reference for mood: "${currentMood || 'Neutral'}".` }] }],
+          config: {
+            systemInstruction: refSystemInstruction,
+            temperature: 0.7,
+          }
+        });
+
+        return res.json({ reply: response.text || '' });
+      }
+
       const systemInstruction = `You are SyncMate, an elite, autonomous AI secretary and Fitness Coach for Muhammad Aqeel. He is a 3rd-semester Biotechnology undergrad at GCUF, Media Management Head of the Beaconite Quiz Society, and frequently participates in Bait Bazi competitions. You must be conversational, sharp, and highly proactive.
 
 CRITICAL OPERATIONAL & FITNESS RULES:
@@ -272,23 +349,10 @@ For a single task:
   }
 }
 \`\`\`
-For a full fitness plan:
-\`\`\`json_action
+5. EMOTIONAL SENTIMENT TRACKING: Analyze the user's emotional sentiment based on their messages (e.g. "Stressed", "Lonely", "Happy", "Motivated", "Grateful", "Neutral"). Always append a sentiment code block at the very end of your response:
+\`\`\`json_mood
 {
-  "action": "CREATE_FITNESS_PLAN",
-  "data": {
-    "title": "Equipment-Free Fitness Routine",
-    "tasks": [
-      {
-        "title": "🏋️ Fitness Focus: Morning Posture & Mobility",
-        "description": "3 Sets: Cobra Stretch, Wall Sits (45s), Wrist & Spine Roll.",
-        "startTime": "06:30",
-        "endTime": "07:00",
-        "category": "health",
-        "aiTip": "Perform on an yoga mat or carpet."
-      }
-    ]
-  }
+  "detectedMood": "Stressed"
 }
 \`\`\`
 
