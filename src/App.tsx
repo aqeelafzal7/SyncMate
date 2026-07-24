@@ -11,7 +11,7 @@ import {
   subscribeUserProjects,
   addProjectToFirestore
 } from './lib/firebase';
-import { UserProfile, ThemeMode, Task, Project, PrayerTimings, WeatherData } from './types';
+import { UserProfile, UserLocation, ThemeMode, Task, Project, PrayerTimings, WeatherData } from './types';
 import { getUserCurrentCoordinates, fetchPrayerTimings, fetchWeatherData } from './lib/contextService';
 
 import { Navbar } from './components/Navbar';
@@ -22,6 +22,7 @@ import { FloatingAssistant } from './components/FloatingAssistant';
 import { TaskModal } from './components/TaskModal';
 import { ProjectsView } from './components/ProjectsView';
 import { ActiveTimerModal } from './components/ActiveTimerModal';
+import { CitySearchModal } from './components/CitySearchModal';
 
 import { Calendar, Target, Bot, Sparkles, Loader2, Timer } from 'lucide-react';
 
@@ -39,6 +40,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'timeline' | 'projects'>('timeline');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [isCitySearchOpen, setIsCitySearchOpen] = useState(false);
 
   // Firestore Data
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -148,6 +150,20 @@ export default function App() {
       loadContext();
     }
   }, [userProfile?.uid, userProfile?.religion]);
+
+  const handleUpdateLocation = async (newLocation: UserLocation) => {
+    if (!userProfile) return;
+    const updatedProf = { ...userProfile, location: newLocation };
+    setUserProfile(updatedProf);
+    saveUserProfile(updatedProf).catch(console.warn);
+
+    // Recalculate Prayer Timings & Weather immediately for the new city!
+    const pTimings = await fetchPrayerTimings(newLocation.latitude, newLocation.longitude);
+    setPrayerTimings(pTimings);
+
+    const wData = await fetchWeatherData(newLocation.latitude, newLocation.longitude);
+    setWeather(wData);
+  };
 
   // Handlers
   const handleGuestLogin = async () => {
@@ -292,6 +308,7 @@ export default function App() {
         onThemeChange={setTheme}
         weather={weather}
         locationName={userProfile?.location?.city}
+        onOpenCitySearch={() => setIsCitySearchOpen(true)}
         onSignOut={handleSignOut}
         onOpenOnboarding={() => setShowOnboarding(true)}
         onToggleAssistant={() => setIsAssistantOpen(!isAssistantOpen)}
@@ -358,6 +375,7 @@ export default function App() {
               setCompletedTaskTitle(taskTitle);
               setIsTimerModalOpen(true);
             }}
+            onOpenCitySearch={() => setIsCitySearchOpen(true)}
           />
         )}
 
@@ -406,6 +424,14 @@ export default function App() {
         onClose={() => setIsTimerModalOpen(false)}
         taskTitle={completedTaskTitle}
         initialMinutes={5}
+      />
+
+      {/* Manual City Search & High-Accuracy GPS Override Modal */}
+      <CitySearchModal
+        isOpen={isCitySearchOpen}
+        onClose={() => setIsCitySearchOpen(false)}
+        currentCity={userProfile?.location?.city}
+        onSelectLocation={handleUpdateLocation}
       />
 
     </div>

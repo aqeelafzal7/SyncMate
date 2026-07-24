@@ -112,13 +112,13 @@ export async function getUserCurrentCoordinates(): Promise<UserLocation> {
       return;
     }
 
-    // Aggressive 3-second timeout for browser GPS
+    // Aggressive 5-second safety timer for high-accuracy browser GPS
     const safetyTimer = setTimeout(() => {
       if (!resolved) {
-        console.warn('Browser GPS timed out after 3s, forcing IP-based location fallback.');
+        console.warn('Browser GPS timed out after 5s, forcing IP-based location fallback.');
         resolveWithIP();
       }
-    }, 3000);
+    }, 5000);
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -133,7 +133,7 @@ export async function getUserCurrentCoordinates(): Promise<UserLocation> {
           // Reverse geocoding
           const res = await fetch(
             `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`, 
-            { signal: AbortSignal.timeout(2500) }
+            { signal: AbortSignal.timeout(3000) }
           );
           if (res.ok) {
             const geoData = await res.json();
@@ -164,10 +164,53 @@ export async function getUserCurrentCoordinates(): Promise<UserLocation> {
         console.warn('Geolocation permission denied or error:', error.message);
         resolveWithIP();
       },
-      { timeout: 3000, enableHighAccuracy: false }
+      { timeout: 5000, enableHighAccuracy: true }
     );
   });
 }
+
+/**
+ * Search city coordinates using OpenStreetMap Nominatim free geocoding API
+ */
+export async function searchCityCoordinates(cityName: string): Promise<UserLocation | null> {
+  if (!cityName || cityName.trim().length === 0) return null;
+
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cityName.trim())}&limit=5`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'SyncMate-App' },
+      signal: AbortSignal.timeout(5000)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const item = data[0];
+        const lat = parseFloat(item.lat);
+        const lon = parseFloat(item.lon);
+        
+        // Clean display name (e.g. "Faisalabad, Punjab, Pakistan" -> "Faisalabad, Pakistan")
+        const nameParts = (item.display_name || item.name || cityName).split(',').map((s: string) => s.trim());
+        let formattedCity = nameParts[0];
+        if (nameParts.length > 1) {
+          formattedCity = `${nameParts[0]}, ${nameParts[nameParts.length - 1]}`;
+        }
+
+        return {
+          latitude: lat,
+          longitude: lon,
+          city: formattedCity,
+          updatedAt: new Date().toISOString()
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('City geocoding search error:', err);
+  }
+
+  return null;
+}
+
 
 /**
  * Fetch Islamic Prayer Timings from Aladhan API (Method 1: ISNA / Method 2: MWL)

@@ -20,6 +20,7 @@ interface NavbarProps {
   onThemeChange: (mode: ThemeMode) => void;
   weather: WeatherData | null;
   locationName?: string;
+  onOpenCitySearch?: () => void;
   onSignOut: () => void;
   onOpenOnboarding: () => void;
   onToggleAssistant: () => void;
@@ -32,6 +33,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onThemeChange,
   weather,
   locationName,
+  onOpenCitySearch,
   onSignOut,
   onOpenOnboarding,
   onToggleAssistant,
@@ -64,15 +66,18 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Center - Weather & Location badge */}
-        <div className="hidden md:flex items-center space-x-4">
-          {locationName && (
-            <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300">
-              <MapPin className="w-3.5 h-3.5 text-indigo-500" />
-              <span>{locationName}</span>
-            </div>
-          )}
+        <div className="hidden md:flex items-center space-x-3">
+          <button
+            onClick={onOpenCitySearch}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 transition-all border border-slate-200/80 dark:border-slate-700/80 group"
+            title="Search or change city location"
+          >
+            <MapPin className="w-3.5 h-3.5 text-indigo-500" />
+            <span className="font-bold">{locationName || 'Set Location'}</span>
+            <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold ml-1 bg-indigo-50 dark:bg-indigo-950/80 px-1.5 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800">✏️ Edit</span>
+          </button>
           {weather && (
-            <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-xs font-medium text-amber-700 dark:text-amber-300 border border-amber-200/50 dark:border-amber-800/50">
+            <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-xs font-medium text-amber-700 dark:text-amber-300 border border-amber-200/50 dark:border-amber-800/50">
               <CloudSun className="w-4 h-4 text-amber-500" />
               <span>{weather.temperature}°C, {weather.condition}</span>
             </div>

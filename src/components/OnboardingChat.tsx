@@ -4,14 +4,14 @@ import {
   Sparkles, 
   MapPin, 
   CheckCircle2, 
-  HelpCircle, 
   Bot, 
   User, 
   Compass, 
   ArrowRight,
-  ShieldAlert
+  ShieldCheck,
+  Check
 } from 'lucide-react';
-import { UserProfile, ChatMessage } from '../types';
+import { UserProfile, ChatMessage, UserLocation } from '../types';
 import { getUserCurrentCoordinates } from '../lib/contextService';
 
 interface OnboardingChatProps {
@@ -23,19 +23,28 @@ export const OnboardingChat: React.FC<OnboardingChatProps> = ({
   initialProfile,
   onComplete,
 }) => {
+  // Onboarding Step State Machine: 
+  // 0: Name, 1: Occupation, 2: Goals, 3: Religion, 4: Complete
+  const [currentStep, setCurrentStep] = useState<number>(0);
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
 
   // Extracted draft profile state
-  const [profile, setProfile] = useState<Partial<UserProfile>>({
+  const [profile, setProfile] = useState<{
+    name: string;
+    occupation: string;
+    goals: string;
+    religion: string;
+    location?: UserLocation;
+  }>({
     name: initialProfile?.name || '',
     occupation: initialProfile?.occupation || '',
     goals: initialProfile?.goals || '',
-    religion: initialProfile?.religion || 'None',
+    religion: initialProfile?.religion || '',
     location: initialProfile?.location,
-    onboarded: false,
   });
 
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -56,9 +65,9 @@ export const OnboardingChat: React.FC<OnboardingChatProps> = ({
         role: 'assistant',
         content: `Hello! I am **SyncMate**, your autonomous AI personal secretary. 🌟
 
-I am thrilled to meet you! My job is to take care of your schedule, optimize your focus blocks, and proactively keep your daily goals on track.
+I am thrilled to meet you! My job is to manage your schedule, optimize focus blocks, and proactively align your daily tasks.
 
-To tailor your experience, I'd love to learn a bit about you. 
+To tailor your experience, I'd love to learn a bit about you.
 
 First, **what is your full name**?`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -66,6 +75,80 @@ First, **what is your full name**?`,
       setMessages([initialGreeting]);
     }
   }, []);
+
+  // Step Machine Logic Handler
+  const processStepAnswer = (textToSend: string): { responseText: string; nextProfile: typeof profile; nextStep: number } => {
+    const nextProf = { ...profile };
+    let responseText = '';
+    let nextStep = currentStep + 1;
+    const lower = textToSend.toLowerCase().trim();
+
+    if (currentStep === 0 || !nextProf.name) {
+      // Step 0: Name
+      let cleanName = textToSend.replace(/^(my name is|i am|call me|name is)\s+/i, '').trim();
+      if (!cleanName) cleanName = textToSend.trim();
+      
+      // Capitalize name
+      cleanName = cleanName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+      nextProf.name = cleanName;
+      nextStep = 1;
+      responseText = `Awesome to meet you, **${cleanName}**! What are you currently studying or working as?`;
+    } 
+    else if (currentStep === 1 || !nextProf.occupation) {
+      // Step 1: Occupation
+      let cleanOcc = textToSend.trim();
+      if (lower.includes('biotech') || lower.includes('student of bs') || lower.includes('bs biotech')) {
+        cleanOcc = 'BS Biotechnology Student';
+      } else if (lower.startsWith('im ') || lower.startsWith('i am ')) {
+        cleanOcc = cleanOcc.replace(/^(im|i am)\s+/i, '');
+        cleanOcc = cleanOcc.charAt(0).toUpperCase() + cleanOcc.slice(1);
+      } else {
+        cleanOcc = cleanOcc.charAt(0).toUpperCase() + cleanOcc.slice(1);
+      }
+
+      nextProf.occupation = cleanOcc;
+      nextStep = 2;
+      responseText = `Awesome! Setting your profile as a **${cleanOcc}**. Now, what long-term projects or goals are you working on right now?`;
+    } 
+    else if (currentStep === 2 || !nextProf.goals) {
+      // Step 2: Goals
+      if (lower === 'nothing' || lower === 'none' || lower.includes('no goal') || lower === 'no') {
+        nextProf.goals = 'General Productivity & Focus';
+        nextStep = 3;
+        responseText = `No problem! We can set up new goals anytime later. Lastly, what is your religion so I can set up your daily schedule anchors?`;
+      } else {
+        nextProf.goals = textToSend.trim();
+        nextStep = 3;
+        responseText = `Got it! Setting your goals. Lastly, what is your religion so I can set up your daily schedule anchors?`;
+      }
+    } 
+    else {
+      // Step 3: Religion
+      let rel = 'Non-Muslim';
+      if (lower.includes('muslim') || lower.includes('islam')) {
+        rel = 'Muslim';
+      } else if (lower.includes('christian')) {
+        rel = 'Christian';
+      } else if (lower.includes('jewish') || lower.includes('jew')) {
+        rel = 'Jewish';
+      } else if (lower.includes('none') || lower.includes('non-muslim')) {
+        rel = 'Non-Muslim';
+      } else {
+        rel = textToSend.trim();
+      }
+
+      nextProf.religion = rel;
+      nextStep = 4;
+      if (rel === 'Muslim') {
+        responseText = `Alhamdulillah! I have locked your daily schedule around the 5 daily prayer anchors (Fajr, Dhuhr, Asr, Maghrib, Isha) based on your dynamic location coordinates. You are all set!`;
+      } else {
+        responseText = `Understood! Your daily schedule is configured for deep work and peak productivity. You are all set!`;
+      }
+    }
+
+    return { responseText, nextProfile: nextProf, nextStep };
+  };
 
   const handleSendMessage = async (customText?: string) => {
     const textToSend = (customText || input).trim();
@@ -85,7 +168,11 @@ First, **what is your full name**?`,
 
     try {
       const customApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
-      // Send chat history to backend Gemini endpoint
+      
+      // Step State Machine calculation
+      const { responseText, nextProfile, nextStep } = processStepAnswer(textToSend);
+
+      // Attempt AI call to backend endpoint
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -94,82 +181,64 @@ First, **what is your full name**?`,
           customApiKey,
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
           context: {
-            currentDraftProfile: profile,
-            isLocationSet: !!profile.location
+            currentDraftProfile: nextProfile,
+            currentStep
           }
         }),
       });
 
-      if (!res.ok) {
-        throw new Error('Chat API returned error');
-      }
+      let finalReplyText = responseText;
 
-      const data = await res.json();
-      const rawReply = data.reply || '';
+      if (res.ok) {
+        const data = await res.json();
+        const rawReply = data.reply || '';
 
-      let chatDisplayReply = rawReply;
-      let parsedData: any = null;
-
-      try {
-        let cleanStr = rawReply.trim();
-        if (cleanStr.startsWith('```')) {
-          cleanStr = cleanStr.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-        }
-        parsedData = JSON.parse(cleanStr);
-      } catch {
-        // If raw reply isn't JSON
-      }
-
-      if (parsedData?.chatResponse) {
-        chatDisplayReply = parsedData.chatResponse;
-      }
-
-      if (parsedData?.extractedData) {
-        const ext = parsedData.extractedData;
-        setProfile((prev) => {
-          const updated = { ...prev };
-          if (ext.name && ext.name !== 'null' && ext.name !== 'string' && ext.name.trim().length > 0) {
-            updated.name = ext.name.trim();
+        try {
+          let cleanStr = rawReply.trim();
+          if (cleanStr.startsWith('```')) {
+            cleanStr = cleanStr.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
           }
-          if (ext.occupation && ext.occupation !== 'null' && ext.occupation !== 'string' && ext.occupation.trim().length > 0) {
-            updated.occupation = ext.occupation.trim();
+          const parsed = JSON.parse(cleanStr);
+          if (parsed?.chatResponse) {
+            finalReplyText = parsed.chatResponse;
           }
-          if (ext.goals && ext.goals !== 'null' && ext.goals !== 'string' && ext.goals.trim().length > 0) {
-            updated.goals = ext.goals.trim();
-          }
-          if (ext.religion && ext.religion !== 'null' && ext.religion !== 'string') {
-            const relLower = String(ext.religion).toLowerCase();
-            if (relLower.includes('muslim') || relLower.includes('islam')) {
-              updated.religion = 'Muslim';
-            } else if (relLower.includes('non-muslim') || relLower.includes('none')) {
-              updated.religion = 'Non-Muslim';
-            } else {
-              updated.religion = ext.religion;
+          if (parsed?.extractedData) {
+            const ext = parsed.extractedData;
+            if (ext.name && ext.name !== 'null') nextProfile.name = ext.name;
+            if (ext.occupation && ext.occupation !== 'null') nextProfile.occupation = ext.occupation;
+            if (ext.goals && ext.goals !== 'null') nextProfile.goals = ext.goals;
+            if (ext.religion && ext.religion !== 'null') {
+              const relL = String(ext.religion).toLowerCase();
+              nextProfile.religion = relL.includes('muslim') || relL.includes('islam') ? 'Muslim' : ext.religion;
             }
           }
-          return updated;
-        });
-      } else {
-        // Fallback update if JSON extraction wasn't present
-        updateProfileFromConversation(textToSend, chatDisplayReply);
+        } catch {
+          // Keep responseText if JSON parsing wasn't exact
+        }
       }
+
+      // Update state and DOM
+      setProfile(nextProfile);
+      setCurrentStep(nextStep);
 
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: chatDisplayReply,
+        content: finalReplyText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 
       setMessages([...newMessages, aiMsg]);
     } catch (err) {
-      console.error('Onboarding chat error:', err);
-      // Fallback local intelligent response
-      const fallbackReply = generateFallbackResponse(textToSend);
+      console.warn('Onboarding chat API notice, applying step machine:', err);
+      const { responseText, nextProfile, nextStep } = processStepAnswer(textToSend);
+      setProfile(nextProfile);
+      setCurrentStep(nextStep);
+
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: fallbackReply,
+        content: responseText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages([...newMessages, aiMsg]);
@@ -178,108 +247,28 @@ First, **what is your full name**?`,
     }
   };
 
-  // Extract user info from inputs to build profile state (Fallback Heuristic)
-  const updateProfileFromConversation = (userText: string, aiReply: string) => {
-    setProfile((prev) => {
-      const updated = { ...prev };
-
-      // 1. Name
-      if (!updated.name) {
-        const cleanName = userText.replace(/my name is|i am|call me/gi, '').trim();
-        if (cleanName.length > 0) updated.name = cleanName;
-      } 
-      // 2. Occupation
-      else if (!updated.occupation) {
-        let occ = userText.trim();
-        if (/im|i am/i.test(occ)) {
-          occ = occ.replace(/^(im|i am)\s+/i, '');
-        }
-        if (occ.toLowerCase().includes('biotech') || occ.toLowerCase().includes('student')) {
-          occ = 'BS Biotechnology Student';
-        }
-        updated.occupation = occ;
-      }
-      // 3. Goals
-      else if (!updated.goals) {
-        updated.goals = userText;
-      }
-      // 4. Religion
-      else if (updated.religion === 'None') {
-        const lower = userText.toLowerCase();
-        if (lower.includes('muslim') || lower.includes('islam')) {
-          updated.religion = 'Muslim';
-        } else if (lower.includes('christian')) {
-          updated.religion = 'Christian';
-        } else if (lower.includes('jewish') || lower.includes('jew')) {
-          updated.religion = 'Jewish';
-        } else if (lower.includes('hindu')) {
-          updated.religion = 'Hindu';
-        } else if (lower.includes('buddhist')) {
-          updated.religion = 'Buddhist';
-        } else {
-          updated.religion = 'None';
-        }
-      }
-
-      return updated;
-    });
-  };
-
-  const generateFallbackResponse = (userText: string): string => {
-    const lower = userText.toLowerCase();
-
-    if (!profile.name) {
-      return `Pleased to meet you, **${userText}**! What is your current occupation or primary study focus?`;
-    }
-    if (!profile.occupation) {
-      return `Got it! Working as **${userText}**. What are your key long-term goals or main projects right now? (e.g. "Preparing for exams", "Building a mobile app", "Organizing a poster competition")`;
-    }
-    if (!profile.goals) {
-      if (lower.includes('poster') || lower.includes('competition') || lower.includes('event') || lower.length < 15) {
-        return `Interesting goal! To help me schedule this accurately: **Are you organizing or participating in this?** What key dates or deliverables are involved?`;
-      }
-      return `Understood! To ensure I respect your daily rhythms, **what is your religion or spiritual preference?** (If Muslim, I will automatically lock your timeline around the 5 daily prayer anchors).`;
-    }
-    if (profile.religion === 'None') {
-      if (lower.includes('muslim') || lower.includes('islam')) {
-        return `SubhanAllah! I will set your schedule to strictly anchor around the 5 daily prayer times (Fajr, Dhuhr, Asr, Maghrib, and Isha) based on your dynamic location coordinates.
-
-Next step: **Please grant GPS Location access** using the button below so I can compute accurate local prayer timings and weather!`;
-      }
-      return `Thank you! I have configured your profile preferences.
-
-Final step: **Please grant GPS Location access** using the button below so I can compute accurate local context and sunrise/sunset timings!`;
-    }
-
-    return `Awesome! Everything is set up. Click **"Complete Onboarding"** to jump into your autonomous secretary dashboard!`;
-  };
-
-  // Fetch dynamic location via Geolocation API
+  // Fetch dynamic location via High-Accuracy Geolocation API
   const handleFetchLocation = async () => {
     setGeoLoading(true);
     try {
       const loc = await getUserCurrentCoordinates();
       setProfile((prev) => ({ ...prev, location: loc }));
-
-      const sysMsg: ChatMessage = {
+      
+      const locMsg: ChatMessage = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `📍 **Dynamic Coordinates Acquired!**
-Lat: \`${loc.latitude.toFixed(4)}\`, Lng: \`${loc.longitude.toFixed(4)}\`
-City: **${loc.city}**
-
-Your local context, prayer anchors, and live weather summaries are fully integrated! You are ready to enter SyncMate.`,
+        content: `📍 **Location Synchronized!** Detected: **${loc.city}** (${loc.latitude.toFixed(2)}°, ${loc.longitude.toFixed(2)}°). Your 5 daily prayer anchors and weather forecasts are now calibrated to this exact city!`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
-      setMessages((prev) => [...prev, sysMsg]);
+      setMessages((prev) => [...prev, locMsg]);
     } catch (err) {
-      console.error('Location error:', err);
+      console.warn('Failed to fetch location:', err);
     } finally {
       setGeoLoading(false);
     }
   };
 
-  // Auto-fetch location in background on mount
+  // Auto-fetch location in background on mount if missing
   useEffect(() => {
     if (!profile.location) {
       getUserCurrentCoordinates()
@@ -310,10 +299,10 @@ Your local context, prayer anchors, and live weather summaries are fully integra
     const finalProfile: UserProfile = {
       uid: initialProfile?.uid || `user_${Date.now()}`,
       email: initialProfile?.email || 'user@syncmate.ai',
-      name: profile.name || 'User',
-      occupation: profile.occupation || 'Professional',
-      goals: profile.goals || 'Goal setting',
-      religion: profile.religion || 'None',
+      name: profile.name || 'SyncMate User',
+      occupation: profile.occupation || 'Professional / Student',
+      goals: profile.goals || 'Master productivity and focus',
+      religion: profile.religion || 'Muslim',
       location: finalLocation,
       onboarded: true,
       createdAt: initialProfile?.createdAt || new Date().toISOString(),
@@ -391,7 +380,7 @@ Your local context, prayer anchors, and live weather summaries are fully integra
           {loading && (
             <div className="flex items-center space-x-3 text-slate-400 text-xs italic">
               <Bot className="w-5 h-5 text-indigo-500 animate-spin" />
-              <span>SyncMate is reflecting & organizing questions...</span>
+              <span>SyncMate is reflecting & organizing your profile...</span>
             </div>
           )}
 
@@ -403,7 +392,7 @@ Your local context, prayer anchors, and live weather summaries are fully integra
           <div className="mx-4 mb-2 p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 flex items-center justify-between">
             <div className="flex items-center space-x-2 text-xs text-indigo-900 dark:text-indigo-200 font-medium">
               <MapPin className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-              <span>Fetch browser GPS coordinates for dynamic location & prayer anchors</span>
+              <span>Fetch high-accuracy GPS coordinates for location & prayer anchors</span>
             </div>
             <button
               onClick={handleFetchLocation}
@@ -429,7 +418,15 @@ Your local context, prayer anchors, and live weather summaries are fully integra
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Answer SyncMate or ask for suggestions..."
+              placeholder={
+                currentStep === 0
+                  ? "Type your full name (e.g. Muhammad Aqeel)..."
+                  : currentStep === 1
+                  ? "Type your occupation/studies (e.g. student of bs biotechnology)..."
+                  : currentStep === 2
+                  ? "Type your goals or 'nothing'..."
+                  : "Type 'Muslim', 'Non-Muslim', or your religion..."
+              }
               className="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl py-3 px-4 text-xs sm:text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
             />
             <button
@@ -455,7 +452,7 @@ Your local context, prayer anchors, and live weather summaries are fully integra
           </div>
 
           <p className="text-xs text-slate-500 dark:text-slate-400 mb-6">
-            As you chat, SyncMate structures your profile details in real-time inside Cloud Firestore.
+            As you chat, SyncMate structures your profile details in real-time.
           </p>
 
           <div className="space-y-4">
@@ -465,8 +462,8 @@ Your local context, prayer anchors, and live weather summaries are fully integra
               <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                 Full Name
               </span>
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                {profile.name || <span className="text-slate-400 italic">Waiting for input...</span>}
+              <span id="profile-name" className="text-xs font-bold text-slate-800 dark:text-slate-200 block mt-0.5">
+                {profile.name || <span className="text-slate-400 italic font-normal">Waiting for input...</span>}
               </span>
             </div>
 
@@ -475,8 +472,8 @@ Your local context, prayer anchors, and live weather summaries are fully integra
               <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                 Occupation / Studies
               </span>
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                {profile.occupation || <span className="text-slate-400 italic">Waiting for input...</span>}
+              <span id="profile-occupation" className="text-xs font-bold text-slate-800 dark:text-slate-200 block mt-0.5">
+                {profile.occupation || <span className="text-slate-400 italic font-normal">Waiting for input...</span>}
               </span>
             </div>
 
@@ -485,8 +482,8 @@ Your local context, prayer anchors, and live weather summaries are fully integra
               <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                 Goals & Projects
               </span>
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                {profile.goals || <span className="text-slate-400 italic">Waiting for input...</span>}
+              <span id="profile-goals" className="text-xs font-bold text-slate-800 dark:text-slate-200 block mt-0.5">
+                {profile.goals || <span className="text-slate-400 italic font-normal">Waiting for input...</span>}
               </span>
             </div>
 
@@ -496,7 +493,7 @@ Your local context, prayer anchors, and live weather summaries are fully integra
                 Religion Logic
               </span>
               <div className="mt-1 flex items-center space-x-2">
-                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                <span id="profile-religion" className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
                   {profile.religion || 'None'}
                 </span>
                 {profile.religion === 'Muslim' && (
@@ -516,30 +513,26 @@ Your local context, prayer anchors, and live weather summaries are fully integra
                 <div className="mt-1 text-xs text-slate-800 dark:text-slate-200 flex items-center space-x-1.5">
                   <MapPin className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                   <span className="font-semibold">{profile.location.city}</span>
-                  <span className="text-[10px] text-slate-400">
-                    ({profile.location.latitude.toFixed(2)}, {profile.location.longitude.toFixed(2)})
-                  </span>
                 </div>
               ) : (
-                <button
-                  onClick={handleFetchLocation}
-                  className="mt-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center space-x-1"
-                >
-                  <Compass className="w-3.5 h-3.5" />
-                  <span>Click to detect GPS Location</span>
-                </button>
+                <span className="text-xs text-slate-400 italic block mt-0.5">
+                  Not set yet
+                </span>
               )}
             </div>
 
           </div>
 
-          <button
-            onClick={handleFinishOnboarding}
-            className="mt-6 w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/20 flex items-center justify-center space-x-2 transition-all"
-          >
-            <span>Complete Onboarding & Launch Dashboard</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          {/* Complete Onboarding Button */}
+          <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <button
+              onClick={handleFinishOnboarding}
+              className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-indigo-500/25 flex items-center justify-center space-x-2 transition-all transform active:scale-95"
+            >
+              <span>Finish Onboarding & Enter Timeline</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
 
         </div>
       </div>

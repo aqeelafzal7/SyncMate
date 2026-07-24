@@ -38,6 +38,7 @@ interface TimelineProps {
   onToggleTaskStatus: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
   onOpenTimerModal?: (taskTitle?: string, mins?: number) => void;
+  onOpenCitySearch?: () => void;
 }
 
 export const Timeline: React.FC<TimelineProps> = ({
@@ -49,6 +50,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   onToggleTaskStatus,
   onDeleteTask,
   onOpenTimerModal,
+  onOpenCitySearch,
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const nowLineRef = useRef<HTMLDivElement>(null);
@@ -292,13 +294,20 @@ export const Timeline: React.FC<TimelineProps> = ({
             )}
 
             {userProfile.location?.city && (
-              <div className="bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-white/10 text-xs flex items-center space-x-2">
+              <button
+                onClick={onOpenCitySearch}
+                className="bg-white/10 hover:bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-white/10 text-xs flex items-center space-x-2 text-left transition-all group cursor-pointer"
+                title="Click to search or edit city location"
+              >
                 <MapPin className="w-4 h-4 text-emerald-300 shrink-0" />
                 <div>
-                  <span className="block text-[10px] text-indigo-200">Location</span>
+                  <span className="block text-[10px] text-indigo-200 font-semibold uppercase tracking-wider flex items-center space-x-1">
+                    <span>Location</span>
+                    <span className="text-emerald-300 underline font-normal text-[9px] ml-1">✏️ Edit / Search</span>
+                  </span>
                   <span className="font-bold">{userProfile.location.city}</span>
                 </div>
-              </div>
+              </button>
             )}
           </div>
 
