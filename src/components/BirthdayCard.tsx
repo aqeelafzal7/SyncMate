@@ -34,9 +34,21 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
       console.warn('Confetti error:', e);
     }
 
-    // Fetch AI Birthday wish
+    const currentYear = new Date().getFullYear();
+    const cacheKey = `syncmate_birthday_wish_${currentYear}`;
+    const cachedWish = localStorage.getItem(cacheKey);
+
+    if (cachedWish) {
+      setWish(cachedWish);
+      setLoading(false);
+      return;
+    }
+
+    // Fetch AI Birthday wish with cache & fallback
     const fetchWish = async () => {
       setLoading(true);
+      const fallbackWish = "Happy Birthday! Another fantastic year of growth and focus awaits. Wish you all the best and continued success! — From your Autonomous Assistant, SyncMate ⚡";
+
       try {
         const customApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
         const res = await fetch('/api/birthday-wish', {
@@ -53,19 +65,23 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
         if (res.ok) {
           const data = await res.json();
           if (data.wish) {
+            localStorage.setItem(cacheKey, data.wish);
             setWish(data.wish);
             setLoading(false);
             return;
           }
         }
       } catch (err) {
-        console.warn('Failed to fetch birthday wish:', err);
+        console.warn('Failed to fetch birthday wish (using cached fallback):', err);
       }
 
-      // Fallback wish matching field jargon rule and mandatory closing line
-      setWish(
-        `Happy Birthday Dear ${userProfile.name}! May your cellular pathways align with exponential growth, boundless energy, and continuous breakthrough achievements. Happy Birthday Dear ${userProfile.name}, wish you all the best and continued success! — From your Autonomous Assistant, SyncMate ⚡`
-      );
+      // Fallback wish on 429 error or quota limits
+      try {
+        localStorage.setItem(cacheKey, fallbackWish);
+      } catch (e) {
+        console.warn('Failed to save fallback wish to localStorage:', e);
+      }
+      setWish(fallbackWish);
       setLoading(false);
     };
 

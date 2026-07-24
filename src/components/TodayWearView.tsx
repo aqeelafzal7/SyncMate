@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Shirt, 
   Sparkles, 
@@ -167,13 +167,50 @@ export const TodayWearView: React.FC<TodayWearViewProps> = ({
     setIsAddModalOpen(false);
   };
 
-  // Generate 3 Contextual AI Outfits
-  const handleGenerateOutfits = async () => {
+  const todayDateStr = new Date().toISOString().split('T')[0];
+  const outfitCacheKey = `syncmate_outfits_${todayDateStr}`;
+
+  // Check for cached outfits on mount
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem(outfitCacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setOutfitOptions(parsed);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load cached outfits:', e);
+    }
+  }, [outfitCacheKey]);
+
+  // Generate 3 Contextual AI Outfits (with caching)
+  const handleGenerateOutfits = async (forceFresh = false) => {
     if (!userProfile?.uid) return;
+
+    if (!forceFresh) {
+      try {
+        const cached = localStorage.getItem(outfitCacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setOutfitOptions(parsed);
+            return;
+          }
+        }
+      } catch (e) {
+        // ignore cache parse error
+      }
+    }
+
     setGenerating(true);
     setWearSuccess(null);
 
     const cleanItems = wardrobeItems.filter((i) => i.status === 'clean');
+
+    let resultingOutfits: StylistOutfitOption[] = [];
 
     try {
       const customApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
@@ -191,15 +228,18 @@ export const TodayWearView: React.FC<TodayWearViewProps> = ({
 
       if (res.ok) {
         const data = await res.json();
-        if (data.outfits) {
-          setOutfitOptions(data.outfits);
+        if (data.outfits && Array.isArray(data.outfits) && data.outfits.length > 0) {
+          resultingOutfits = data.outfits;
         }
       }
     } catch (err) {
       console.warn('Stylist endpoint error, applying client-side fallback:', err);
+    }
+
+    if (resultingOutfits.length === 0) {
       // Fallback outfit generation
       const itemIds = cleanItems.slice(0, 4).map((i) => i.id);
-      setOutfitOptions([
+      resultingOutfits = [
         {
           id: 'option_a',
           title: 'Option A: Executive Sharp',
@@ -221,10 +261,18 @@ export const TodayWearView: React.FC<TodayWearViewProps> = ({
           itemIds: itemIds.slice(1, 4),
           styleNotes: 'Maximum breathable comfort for deep work.'
         }
-      ]);
-    } finally {
-      setGenerating(false);
+      ];
     }
+
+    // Cache outfits for today
+    try {
+      localStorage.setItem(outfitCacheKey, JSON.stringify(resultingOutfits));
+    } catch (e) {
+      console.warn('Failed to cache outfits in localStorage:', e);
+    }
+
+    setOutfitOptions(resultingOutfits);
+    setGenerating(false);
   };
 
   // Wear This Today Action Handler
@@ -330,7 +378,7 @@ export const TodayWearView: React.FC<TodayWearViewProps> = ({
             </div>
 
             <button
-              onClick={handleGenerateOutfits}
+              onClick={() => handleGenerateOutfits(true)}
               disabled={generating || cleanItemsCount === 0}
               className="px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 disabled:opacity-50 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-indigo-500/25 flex items-center space-x-2 transition-all"
             >
