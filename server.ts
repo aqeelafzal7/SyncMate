@@ -16,17 +16,38 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Initialize Gemini API client lazily
-  let aiClient: GoogleGenAI | null = null;
-  function getAI() {
-    if (!aiClient) {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        console.warn('GEMINI_API_KEY is missing. Gemini fallback or simulated responses may be used if required.');
-      }
-      aiClient = new GoogleGenAI({ apiKey: apiKey || 'dummy-key-for-dev' });
+  // Initialize Gemini API client with Referer forwarding to support referrer-restricted API keys
+  function getAI(req?: express.Request) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.warn('GEMINI_API_KEY is missing.');
     }
-    return aiClient;
+
+    let referer = req?.headers.referer || req?.headers.origin;
+    if (!referer && req) {
+      const host = req.get('host');
+      if (host) {
+        const protocol = req.protocol || 'https';
+        referer = `${protocol}://${host}/`;
+      }
+    }
+
+    const headers: Record<string, string> = {};
+    if (referer) {
+      headers['Referer'] = referer;
+      try {
+        headers['Origin'] = referer.startsWith('http') ? new URL(referer).origin : referer;
+      } catch (e) {
+        headers['Origin'] = referer;
+      }
+    }
+
+    return new GoogleGenAI({
+      apiKey: apiKey || 'dummy-key-for-dev',
+      httpOptions: {
+        headers,
+      },
+    });
   }
 
   // Health check
@@ -44,7 +65,7 @@ async function startServer() {
         return res.status(400).json({ error: 'GEMINI_API_KEY_MISSING' });
       }
 
-      const ai = getAI();
+      const ai = getAI(req);
 
       const prompt = `You are SyncMate's Self-Healing Schedule Engine.
 Re-organize these incomplete leftover tasks into today's schedule for user "${userProfile?.name || 'User'}".
@@ -109,37 +130,95 @@ Return a JSON object in this format inside a markdown \`\`\`json block:
 
   // AI Chat endpoint for Onboarding and Floating Secretary
   app.post('/api/chat', async (req, res) => {
+    const { messages, context, mode, customApiKey } = req.body || {};
     try {
-      const { messages, context, mode } = req.body;
-      
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = customApiKey || process.env.GEMINI_API_KEY;
       if (!apiKey) {
         return res.status(400).json({
           error: 'GEMINI_API_KEY_MISSING',
-          message: 'Gemini API key is not configured. Please set GEMINI_API_KEY in the secrets settings.'
+          message: 'No Gemini API key configured. Please click "🔑 API Key" in the chat header to save your key.'
         });
       }
 
-      const ai = getAI();
+      const headers: Record<string, string> = { 'User-Agent': 'aistudio-build' };
+      let referer = req.headers.referer || req.headers.origin;
+      if (!referer) {
+        const host = req.get('host');
+        if (host) {
+          const protocol = req.protocol || 'https';
+          referer = `${protocol}://${host}/`;
+        }
+      }
+      if (referer) {
+        headers['Referer'] = referer;
+      }
 
-      const systemInstruction = `You are "SyncMate", an autonomous, elite AI personal secretary.
-You are professional, warm, proactive, highly organized, and hyper-competent.
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: { headers }
+      });
 
-CRITICAL RULES:
-1. INQUISITIVE: If the user provides a vague task, event, project, or goal (e.g., "I have a poster competition", "I want to start a course", "I have an event next week"), you MUST stop and ask 1 to 2 concise clarifying questions (e.g., "Are you organizing it or participating?", "What exact date and time slot do you prefer?", "What key deliverables are involved?"). NEVER assume missing details or hallucinate times without confirming.
-2. OBEDIENT YET ADVISORY: Strictly follow the user's explicit commands (e.g., user wants a meeting at 3 PM, schedule it at 3 PM). BUT ALWAYS provide 1 or 2 proactive, context-aware suggestions or tips (e.g., "Tip: I recommend setting a 15-minute preparation buffer", "Weather note: Local forecast shows rain tomorrow, consider an indoor prep space").
-3. RELIGION & PRAYER LOGIC: If the user indicates they are Muslim, acknowledge that their daily timeline strictly anchors around the 5 daily prayer times (Fajr, Dhuhr, Asr, Maghrib, Isha), ensuring tasks are intelligently scheduled around these non-negotiable spiritual anchors.
-4. STRUCTURED ACTION OUTPUT: When a task, project, or profile update is finalized and ready to be created/saved, append a JSON block at the very end of your response inside a Markdown code block tagged \`\`\`json_action:
+      if (mode === 'decompose_project') {
+        const { project, existingTasks, prayerTimings } = context || {};
+        const decomposeSystemInstruction = `You are SyncMate, an elite AI scheduling assistant.
+Your job is to break down the long-term project "${project?.title || 'Project'}" (Description: "${project?.description || ''}", Goals: ${(project?.goals || []).join(', ')}) into 3 to 5 bite-sized 30-to-45-minute daily focus sub-tasks.
+
+CRITICAL TIMELINE RULES:
+1. Do NOT overlap with non-negotiable Islamic prayer times: ${JSON.stringify(prayerTimings || {})}.
+2. Do NOT overlap with existing tasks: ${JSON.stringify(existingTasks?.map((t: any) => ({ startTime: t.startTime, endTime: t.endTime })) || [])}.
+3. Pick open hourly slots between 08:00 and 22:00.
+4. Output strictly a markdown JSON code block as follows:
 \`\`\`json_action
 {
-  "action": "CREATE_TASK" | "CREATE_PROJECT" | "UPDATE_PROFILE",
-  "data": { ... }
+  "action": "DECOMPOSE_PROJECT",
+  "data": {
+    "projectId": "${project?.id || ''}",
+    "tasks": [
+      {
+        "title": "Clear concise sub-task title",
+        "description": "Specific focus milestone detail",
+        "startTime": "HH:MM",
+        "endTime": "HH:MM",
+        "category": "study" | "work" | "personal",
+        "aiTip": "Actionable tip for this milestone"
+      }
+    ]
+  }
+}
+\`\`\``;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.6-flash',
+          contents: [{ role: 'user', parts: [{ text: `Decompose project "${project?.title}" into 3-5 focus tasks.` }] }],
+          config: {
+            systemInstruction: decomposeSystemInstruction,
+            temperature: 0.5,
+          }
+        });
+
+        return res.json({ reply: response.text || '' });
+      }
+
+      const systemInstruction = `You are SyncMate, an elite, autonomous AI secretary for Muhammad Aqeel. He is a 3rd-semester Biotechnology undergrad at GCUF, Media Management Head of the Beaconite Quiz Society, and frequently participates in Bait Bazi competitions. You must be conversational, sharp, and highly proactive. If he states a massive or vague goal (like "I want to be Prime Minister"), do NOT give generic responses. Instead, ask practical, clarifying questions about how to take the very first step considering his current university roles and skills.
+
+CRITICAL OPERATIONAL RULES:
+1. INQUISITIVE & PROACTIVE: When given vague goals, events, or tasks, ask 1-2 sharp, highly targeted clarifying questions tailored to his background (GCUF Biotechnology, Beaconite Quiz Society, Bait Bazi, Media Management).
+2. OBEDIENT YET ADVISORY: Always respect user commands, but offer 1-2 practical, context-aware suggestions (e.g., buffer time, location/weather considerations).
+3. RELIGION & PRAYER ANCHORS: Keep timeline tasks intelligently scheduled around non-negotiable Islamic prayer times (Fajr, Dhuhr, Asr, Maghrib, Isha).
+4. STRUCTURED ACTION OUTPUT: When finalizing a new task or schedule addition, append a markdown JSON action code block at the very end of your response:
+\`\`\`json_action
+{
+  "action": "CREATE_TASK",
+  "data": {
+    "title": "Task title",
+    "description": "Short description",
+    "startTime": "HH:MM",
+    "endTime": "HH:MM",
+    "category": "work" | "study" | "personal" | "health",
+    "aiTip": "Contextual advisory tip"
+  }
 }
 \`\`\`
-
-MODE SPECIFICS:
-- Mode "onboarding": Guide the user through "Meet Your Secretary" onboarding one step at a time. Ask about: 1. Name, 2. Occupation/Studies, 3. Long-term goals (ask clarifying follow-ups if vague!), 4. Religion/Spiritual preferences (explaining why: to customize daily prayer/focus anchors).
-- Mode "assistant": Help the user schedule tasks, manage projects, or answer queries. If they request a new task or event, clarify details if vague, obey explicit requests, offer 1 proactive advisory tip, and generate the CREATE_TASK json_action when details are confirmed.
 
 Current User Context:
 ${JSON.stringify(context || {}, null, 2)}`;
@@ -151,7 +230,7 @@ ${JSON.stringify(context || {}, null, 2)}`;
       }));
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         contents: formattedContents,
         config: {
           systemInstruction,
@@ -164,7 +243,10 @@ ${JSON.stringify(context || {}, null, 2)}`;
 
     } catch (err: any) {
       console.error('Error in /api/chat:', err);
-      return res.status(500).json({ error: 'AI_SERVICE_ERROR', details: err.message || 'Failed to process AI chat request' });
+      return res.status(500).json({
+        error: 'AI_CHAT_ERROR',
+        message: err.message || 'Failed to call Gemini API'
+      });
     }
   });
 

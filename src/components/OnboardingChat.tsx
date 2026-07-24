@@ -84,12 +84,14 @@ First, **what is your full name**?`,
     setLoading(true);
 
     try {
+      const customApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
       // Send chat history to backend Gemini endpoint
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mode: 'onboarding',
+          customApiKey,
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
           context: {
             currentDraftProfile: profile,

@@ -129,17 +129,13 @@ export default function App() {
   // Load Location & Context Engine Data (Prayer Timings + Weather)
   useEffect(() => {
     async function loadContext() {
-      let coords = userProfile?.location;
-      if (!coords) {
-        coords = await getUserCurrentCoordinates();
-        if (userProfile) {
+      const coords = await getUserCurrentCoordinates();
+      if (coords && userProfile) {
+        if (!userProfile.location || userProfile.location.city !== coords.city) {
           const updatedProf = { ...userProfile, location: coords };
           setUserProfile(updatedProf);
-          await saveUserProfile(updatedProf);
+          saveUserProfile(updatedProf).catch(console.warn);
         }
-      }
-
-      if (coords) {
         const pTimings = await fetchPrayerTimings(coords.latitude, coords.longitude);
         setPrayerTimings(pTimings);
 
@@ -363,7 +359,11 @@ export default function App() {
           <ProjectsView
             projects={projects}
             onAddProject={handleAddProject}
+            onTaskCreated={handleSaveTask}
             userId={userProfile.uid}
+            userProfile={userProfile}
+            prayerTimings={prayerTimings}
+            existingTasks={tasks}
           />
         )}
 
@@ -388,6 +388,7 @@ export default function App() {
           userProfile={userProfile}
           tasks={tasks}
           prayerTimings={prayerTimings}
+          weather={weather}
           onTaskCreated={handleSaveTask}
           onTasksRolledOver={handleTasksRolledOver}
         />

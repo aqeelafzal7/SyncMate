@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Clock, 
   Plus, 
@@ -17,7 +17,10 @@ import {
   Trash2,
   Tag,
   Check,
-  ChevronRight
+  ChevronRight,
+  Edit2,
+  RotateCcw,
+  Target
 } from 'lucide-react';
 import { UserProfile, Task, PrayerTimings, WeatherData } from '../types';
 
@@ -41,12 +44,70 @@ export const Timeline: React.FC<TimelineProps> = ({
   onDeleteTask,
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
+  const nowLineRef = useRef<HTMLDivElement>(null);
+  const [hasScrolledToNow, setHasScrolledToNow] = useState(false);
 
-  // Update real-time clock every minute
+  // Manual Prayer Overrides state (persisted in localStorage)
+  const [customPrayerTimes, setCustomPrayerTimes] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem('syncmate_custom_prayer_times');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Modal for editing a prayer time
+  const [editingPrayer, setEditingPrayer] = useState<{
+    name: string;
+    key: 'Fajr' | 'Dhuhr' | 'Asr' | 'Maghrib' | 'Isha';
+    time: string;
+  } | null>(null);
+  const [editTimeValue, setEditTimeValue] = useState<string>('');
+
+  // Effective Prayer Timings: Custom Overrides take strict precedence over Aladhan API
+  const effectivePrayerTimings = prayerTimings
+    ? {
+        ...prayerTimings,
+        ...customPrayerTimes,
+      }
+    : null;
+
+  const handleSavePrayerOverride = () => {
+    if (!editingPrayer) return;
+    const updated = {
+      ...customPrayerTimes,
+      [editingPrayer.key]: editTimeValue
+    };
+    setCustomPrayerTimes(updated);
+    localStorage.setItem('syncmate_custom_prayer_times', JSON.stringify(updated));
+    setEditingPrayer(null);
+  };
+
+  const handleResetPrayerOverride = () => {
+    if (!editingPrayer) return;
+    const updated = { ...customPrayerTimes };
+    delete updated[editingPrayer.key];
+    setCustomPrayerTimes(updated);
+    localStorage.setItem('syncmate_custom_prayer_times', JSON.stringify(updated));
+    setEditingPrayer(null);
+  };
+
+  // Update real-time clock every 20 seconds
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 30000);
+    const timer = setInterval(() => setCurrentTime(new Date()), 20000);
     return () => clearInterval(timer);
   }, []);
+
+  // Auto-scroll timeline to current time indicator on initial render
+  useEffect(() => {
+    if (nowLineRef.current && !hasScrolledToNow) {
+      setTimeout(() => {
+        nowLineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHasScrolledToNow(true);
+      }, 400);
+    }
+  }, [hasScrolledToNow]);
 
   const currentHour = currentTime.getHours();
   const currentMinute = currentTime.getMinutes();
@@ -56,7 +117,9 @@ export const Timeline: React.FC<TimelineProps> = ({
 
   // Helper to check if a prayer falls into a specific hour slot
   const getPrayerForHour = (hour: number) => {
-    if (!prayerTimings || userProfile.religion !== 'Muslim') return null;
+    if (!effectivePrayerTimings) return null;
+    // Show prayer anchors for Muslim profile or if religion not non-Muslim
+    if (userProfile.religion === 'Christian' || userProfile.religion === 'Jewish' || userProfile.religion === 'Other') return null;
 
     const parseHour = (timeStr?: string) => {
       if (!timeStr) return -1;
@@ -64,17 +127,17 @@ export const Timeline: React.FC<TimelineProps> = ({
       return parseInt(parts[0], 10);
     };
 
-    const fajrH = parseHour(prayerTimings.Fajr);
-    const dhuhrH = parseHour(prayerTimings.Dhuhr);
-    const asrH = parseHour(prayerTimings.Asr);
-    const maghribH = parseHour(prayerTimings.Maghrib);
-    const ishaH = parseHour(prayerTimings.Isha);
+    const fajrH = parseHour(effectivePrayerTimings.Fajr);
+    const dhuhrH = parseHour(effectivePrayerTimings.Dhuhr);
+    const asrH = parseHour(effectivePrayerTimings.Asr);
+    const maghribH = parseHour(effectivePrayerTimings.Maghrib);
+    const ishaH = parseHour(effectivePrayerTimings.Isha);
 
-    if (hour === fajrH) return { name: 'Fajr Prayer', time: prayerTimings.Fajr, icon: Sunrise, bg: 'from-indigo-900/60 to-purple-900/60 border-indigo-700/80' };
-    if (hour === dhuhrH) return { name: 'Dhuhr Prayer', time: prayerTimings.Dhuhr, icon: Sun, bg: 'from-amber-900/60 to-yellow-900/60 border-amber-700/80' };
-    if (hour === asrH) return { name: 'Asr Prayer', time: prayerTimings.Asr, icon: Sun, bg: 'from-orange-900/60 to-amber-900/60 border-orange-700/80' };
-    if (hour === maghribH) return { name: 'Maghrib Prayer', time: prayerTimings.Maghrib, icon: Sunset, bg: 'from-rose-900/60 to-pink-900/60 border-rose-700/80' };
-    if (hour === ishaH) return { name: 'Isha Prayer', time: prayerTimings.Isha, icon: MoonStar, bg: 'from-blue-950/70 to-slate-900/70 border-blue-800/80' };
+    if (hour === fajrH) return { name: 'Fajr Prayer', key: 'Fajr' as const, time: effectivePrayerTimings.Fajr, icon: Sunrise, bg: 'from-indigo-900/80 via-purple-900/80 to-indigo-950/80 border-indigo-700/80', isCustom: Boolean(customPrayerTimes.Fajr) };
+    if (hour === dhuhrH) return { name: 'Dhuhr Prayer', key: 'Dhuhr' as const, time: effectivePrayerTimings.Dhuhr, icon: Sun, bg: 'from-amber-900/80 via-yellow-900/80 to-amber-950/80 border-amber-700/80', isCustom: Boolean(customPrayerTimes.Dhuhr) };
+    if (hour === asrH) return { name: 'Asr Prayer', key: 'Asr' as const, time: effectivePrayerTimings.Asr, icon: Sun, bg: 'from-orange-900/80 via-amber-900/80 to-orange-950/80 border-orange-700/80', isCustom: Boolean(customPrayerTimes.Asr) };
+    if (hour === maghribH) return { name: 'Maghrib Prayer', key: 'Maghrib' as const, time: effectivePrayerTimings.Maghrib, icon: Sunset, bg: 'from-rose-900/80 via-pink-900/80 to-rose-950/80 border-rose-700/80', isCustom: Boolean(customPrayerTimes.Maghrib) };
+    if (hour === ishaH) return { name: 'Isha Prayer', key: 'Isha' as const, time: effectivePrayerTimings.Isha, icon: MoonStar, bg: 'from-blue-950/80 via-slate-900/80 to-indigo-950/80 border-blue-800/80', isCustom: Boolean(customPrayerTimes.Isha) };
 
     return null;
   };
@@ -87,6 +150,13 @@ export const Timeline: React.FC<TimelineProps> = ({
       return tHour === hour;
     });
   };
+
+  const gregorianDateFormatted = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
 
   return (
     <div className="space-y-6">
@@ -101,32 +171,33 @@ export const Timeline: React.FC<TimelineProps> = ({
           
           <div>
             <div className="flex items-center space-x-2 text-indigo-300 text-xs font-semibold uppercase tracking-wider mb-1">
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className="w-4 h-4 text-amber-300 animate-spin" />
               <span>Context Engine Active</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
               Welcome back, {userProfile.name || 'User'}!
             </h1>
             <p className="text-xs sm:text-sm text-indigo-200 mt-1 max-w-xl">
-              SyncMate has synchronized your timeline. {userProfile.religion === 'Muslim' ? 'Your 5 daily prayer anchors are strictly locked to protect your spiritual focus.' : 'Your daily deep-work focus slots are optimized.'}
+              SyncMate has synchronized your timeline. {userProfile.religion === 'Muslim' || !userProfile.religion || userProfile.religion === 'None' ? 'Your 5 daily prayer anchors are strictly locked to protect your spiritual focus.' : 'Your daily deep-work focus slots are optimized.'}
             </p>
           </div>
 
           {/* Quick Context Chips */}
           <div className="flex flex-wrap items-center gap-3 shrink-0">
-            {prayerTimings?.dateHijri && (
-              <div className="bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-white/10 text-xs flex items-center space-x-2">
-                <CalendarIcon className="w-4 h-4 text-purple-300" />
-                <div>
-                  <span className="block text-[10px] text-indigo-200">Hijri Date</span>
-                  <span className="font-bold">{prayerTimings.dateHijri}</span>
-                </div>
+            {/* Dual Calendar Pill: Gregorian + Hijri */}
+            <div className="bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-white/10 text-xs flex items-center space-x-2.5">
+              <CalendarIcon className="w-4 h-4 text-purple-300 shrink-0" />
+              <div>
+                <span className="block text-[10px] text-indigo-200 font-semibold uppercase tracking-wider">Dual Calendar</span>
+                <span className="font-bold text-white text-xs sm:text-sm">
+                  {gregorianDateFormatted}{prayerTimings?.dateHijri ? ` | ${prayerTimings.dateHijri}` : ''}
+                </span>
               </div>
-            )}
+            </div>
 
             {weather && (
               <div className="bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-white/10 text-xs flex items-center space-x-2">
-                <CloudSun className="w-4 h-4 text-amber-300" />
+                <CloudSun className="w-4 h-4 text-amber-300 shrink-0" />
                 <div>
                   <span className="block text-[10px] text-indigo-200">Local Weather</span>
                   <span className="font-bold">{weather.temperature}°C, {weather.condition}</span>
@@ -136,9 +207,9 @@ export const Timeline: React.FC<TimelineProps> = ({
 
             {userProfile.location?.city && (
               <div className="bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-white/10 text-xs flex items-center space-x-2">
-                <MapPin className="w-4 h-4 text-emerald-300" />
+                <MapPin className="w-4 h-4 text-emerald-300 shrink-0" />
                 <div>
-                  <span className="block text-[10px] text-indigo-200">Coordinates</span>
+                  <span className="block text-[10px] text-indigo-200">Location</span>
                   <span className="font-bold">{userProfile.location.city}</span>
                 </div>
               </div>
@@ -153,14 +224,12 @@ export const Timeline: React.FC<TimelineProps> = ({
         <div className="flex items-center space-x-4 text-xs font-medium text-slate-600 dark:text-slate-300">
           <div className="flex items-center space-x-1.5">
             <Clock className="w-4 h-4 text-indigo-500" />
-            <span>Realtime Timeline: <strong className="text-slate-900 dark:text-white">{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong></span>
+            <span>Realtime Timeline: <strong className="text-slate-900 dark:text-white font-mono">{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</strong></span>
           </div>
-          {userProfile.religion === 'Muslim' && (
-            <span className="hidden md:inline-flex items-center space-x-1 px-2.5 py-1 rounded-md bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[11px] font-semibold">
-              <Lock className="w-3 h-3 text-purple-500" />
-              <span>5 Fixed Prayer Anchors Locked</span>
-            </span>
-          )}
+          <span className="hidden md:inline-flex items-center space-x-1 px-2.5 py-1 rounded-md bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[11px] font-semibold">
+            <Lock className="w-3 h-3 text-purple-500" />
+            <span>5 Prayer Anchors Locked</span>
+          </span>
         </div>
 
         <button
@@ -171,6 +240,69 @@ export const Timeline: React.FC<TimelineProps> = ({
           <span>Add Custom Task</span>
         </button>
       </div>
+
+      {/* Manual Prayer Edit Modal */}
+      {editingPrayer && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 text-indigo-600 dark:text-indigo-400 font-bold text-sm">
+                <Clock className="w-4 h-4" />
+                <span>Edit {editingPrayer.name} Time</span>
+              </div>
+              <button
+                onClick={() => setEditingPrayer(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Adjust exact congregation or mosque jamat time. The context engine will re-anchor your tasks around this time.
+            </p>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Exact Prayer Time (24-Hour)
+              </label>
+              <input
+                type="time"
+                value={editTimeValue}
+                onChange={(e) => setEditTimeValue(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              {customPrayerTimes[editingPrayer.key] ? (
+                <button
+                  onClick={handleResetPrayerOverride}
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 flex items-center space-x-1"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Reset Default</span>
+                </button>
+              ) : <div />}
+
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setEditingPrayer(null)}
+                  className="px-3 py-2 text-xs font-semibold text-slate-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSavePrayerOverride}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20"
+                >
+                  Save Time
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 24-Hour Vertical Timeline */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl relative">
@@ -188,12 +320,13 @@ export const Timeline: React.FC<TimelineProps> = ({
                 {/* Current Time Red Progress Line */}
                 {isCurrentHour && (
                   <div
-                    className="absolute left-0 right-0 z-20 flex items-center pointer-events-none"
+                    ref={nowLineRef}
+                    className="absolute left-0 right-0 z-20 flex items-center pointer-events-none transition-all duration-500"
                     style={{ top: `${(currentMinute / 60) * 100}%` }}
                   >
-                    <div className="w-3 h-3 rounded-full bg-red-500 animate-ping -ml-1.5 shrink-0" />
+                    <div className="w-3.5 h-3.5 rounded-full bg-red-500 animate-ping -ml-1.5 shrink-0" />
                     <div className="h-0.5 bg-red-500 flex-1 shadow-sm shadow-red-500/50" />
-                    <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm ml-2">
+                    <span className="bg-red-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-md ml-2 font-mono">
                       NOW ({currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
                     </span>
                   </div>
@@ -220,13 +353,13 @@ export const Timeline: React.FC<TimelineProps> = ({
                     {/* Fixed Prayer Anchor Block (if Muslim & prayer time) */}
                     {prayerAnchor && (
                       <div className={`p-4 rounded-2xl bg-gradient-to-r ${prayerAnchor.bg} border text-white shadow-lg relative overflow-hidden`}>
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div className="flex items-center space-x-3">
                             <div className="p-2 rounded-xl bg-white/10 backdrop-blur-md">
                               <prayerAnchor.icon className="w-5 h-5 text-amber-300 animate-pulse" />
                             </div>
                             <div>
-                              <div className="flex items-center space-x-2">
+                              <div className="flex items-center space-x-2 flex-wrap gap-1">
                                 <h3 className="font-bold text-sm tracking-wide text-white">
                                   {prayerAnchor.name}
                                 </h3>
@@ -234,15 +367,38 @@ export const Timeline: React.FC<TimelineProps> = ({
                                   <Lock className="w-2.5 h-2.5" />
                                   <span>Fixed Anchor</span>
                                 </span>
+                                {prayerAnchor.isCustom && (
+                                  <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
+                                    Mosque Jamat Custom
+                                  </span>
+                                )}
                               </div>
                               <p className="text-xs text-slate-200 mt-0.5">
                                 Spiritual schedule anchor strictly reserved around {prayerAnchor.time}
                               </p>
                             </div>
                           </div>
-                          <span className="font-mono text-xs font-bold px-3 py-1 bg-black/30 rounded-lg border border-white/10">
-                            {prayerAnchor.time}
-                          </span>
+
+                          <div className="flex items-center space-x-2 self-end sm:self-auto">
+                            <span className="font-mono text-xs font-bold px-3 py-1 bg-black/40 rounded-xl border border-white/15">
+                              {prayerAnchor.time}
+                            </span>
+                            <button
+                              onClick={() => {
+                                setEditingPrayer({
+                                  name: prayerAnchor.name,
+                                  key: prayerAnchor.key,
+                                  time: prayerAnchor.time,
+                                });
+                                setEditTimeValue(prayerAnchor.time);
+                              }}
+                              className="px-2.5 py-1 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold border border-white/20 transition-all flex items-center space-x-1"
+                              title="Edit exact mosque jamat time"
+                            >
+                              <Edit2 className="w-3 h-3 text-amber-300" />
+                              <span>Edit</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -270,11 +426,19 @@ export const Timeline: React.FC<TimelineProps> = ({
                               )}
                             </button>
                             <div>
-                              <h4 className={`text-xs sm:text-sm font-bold ${t.status === 'completed' ? 'line-through text-slate-400' : 'text-slate-900 dark:text-white'}`}>
-                                {t.title}
-                              </h4>
+                              <div className="flex items-center space-x-2 flex-wrap gap-1 mb-1">
+                                <h4 className={`text-xs sm:text-sm font-bold ${t.status === 'completed' ? 'line-through text-slate-400' : 'text-slate-900 dark:text-white'}`}>
+                                  {t.title}
+                                </h4>
+                                {t.projectId && (
+                                  <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-500/20 to-indigo-500/20 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800 text-[10px] font-bold flex items-center space-x-1">
+                                    <Target className="w-2.5 h-2.5 text-purple-500" />
+                                    <span>🎯 Project Milestone</span>
+                                  </span>
+                                )}
+                              </div>
                               {t.description && (
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                   {t.description}
                                 </p>
                               )}
@@ -290,7 +454,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                           </div>
 
                           <div className="flex items-center space-x-2 shrink-0">
-                            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-md">
+                            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-md font-mono">
                               {t.startTime} - {t.endTime}
                             </span>
                             <button
@@ -330,3 +494,4 @@ export const Timeline: React.FC<TimelineProps> = ({
     </div>
   );
 };
+

@@ -15,12 +15,19 @@ export const ActiveTimerModal: React.FC<ActiveTimerModalProps> = ({
   taskTitle,
   initialMinutes = 5,
 }) => {
+  const [totalMins, setTotalMins] = useState(initialMinutes);
   const [secondsLeft, setSecondsLeft] = useState(initialMinutes * 60);
   const [isRunning, setIsRunning] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
-  const [selectedHabit, setSelectedHabit] = useState<'hydration' | 'eye' | 'stretch' | 'breathing'>('hydration');
+  const [selectedHabit, setSelectedHabit] = useState<'hydration' | 'eye' | 'stretch' | 'breathing' | 'custom'>('hydration');
+  const [activeHabitLabel, setActiveHabitLabel] = useState<string>('Hydration Reset');
+
+  // Custom Habit Inputs
+  const [customHabitName, setCustomHabitName] = useState('');
+  const [customHabitMins, setCustomHabitMins] = useState('');
 
   useEffect(() => {
+    setTotalMins(initialMinutes);
     setSecondsLeft(initialMinutes * 60);
     setIsRunning(false);
     setIsFinished(false);
@@ -38,23 +45,38 @@ export const ActiveTimerModal: React.FC<ActiveTimerModalProps> = ({
       playCompletionChime();
       if ('Notification' in window && Notification.permission === 'granted') {
         new Notification('SyncMate Micro-Habit Complete!', {
-          body: `Great job completing your ${selectedHabit} session!`,
+          body: `Great job completing your ${activeHabitLabel} session!`,
         });
       }
     }
     return () => clearInterval(interval);
-  }, [isRunning, secondsLeft, selectedHabit]);
+  }, [isRunning, secondsLeft, activeHabitLabel]);
 
   if (!isOpen) return null;
 
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
-  const progressPercent = ((initialMinutes * 60 - secondsLeft) / (initialMinutes * 60)) * 100;
+  const progressPercent = ((totalMins * 60 - secondsLeft) / (totalMins * 60)) * 100;
 
-  const setTimerPreset = (mins: number) => {
+  const setTimerPreset = (mins: number, label?: string) => {
+    setTotalMins(mins);
     setSecondsLeft(mins * 60);
     setIsRunning(false);
     setIsFinished(false);
+    if (label) setActiveHabitLabel(label);
+  };
+
+  const handleStartCustomHabit = () => {
+    const name = customHabitName.trim() || 'Custom Focus Session';
+    const parsed = parseInt(customHabitMins, 10);
+    const mins = !isNaN(parsed) && parsed > 0 ? parsed : 5;
+
+    setActiveHabitLabel(name);
+    setTotalMins(mins);
+    setSecondsLeft(mins * 60);
+    setSelectedHabit('custom');
+    setIsFinished(false);
+    setIsRunning(true);
   };
 
   const habits = [
@@ -92,7 +114,7 @@ export const ActiveTimerModal: React.FC<ActiveTimerModalProps> = ({
         {/* Content Body */}
         <div className="p-6 space-y-6">
           
-          {/* Habit Selector */}
+          {/* Habit Selector Grid */}
           <div className="grid grid-cols-2 gap-3">
             {habits.map((h) => {
               const Icon = h.icon;
@@ -102,10 +124,10 @@ export const ActiveTimerModal: React.FC<ActiveTimerModalProps> = ({
                   key={h.id}
                   onClick={() => {
                     setSelectedHabit(h.id as any);
-                    if (h.id === 'hydration') setTimerPreset(2);
-                    if (h.id === 'eye') setTimerPreset(3);
-                    if (h.id === 'stretch') setTimerPreset(5);
-                    if (h.id === 'breathing') setTimerPreset(3);
+                    if (h.id === 'hydration') setTimerPreset(2, 'Hydration Reset');
+                    if (h.id === 'eye') setTimerPreset(3, '20-20-20 Eye Relief');
+                    if (h.id === 'stretch') setTimerPreset(5, 'Spine & Posture Stretch');
+                    if (h.id === 'breathing') setTimerPreset(3, 'Deep Mindful Breathing');
                   }}
                   className={`p-3.5 rounded-2xl border text-left transition-all relative ${
                     isSelected
@@ -132,6 +154,39 @@ export const ActiveTimerModal: React.FC<ActiveTimerModalProps> = ({
             })}
           </div>
 
+          {/* Custom Focus/Habit Section */}
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 space-y-3">
+            <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center space-x-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Custom Focus/Habit</span>
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <input
+                type="text"
+                value={customHabitName}
+                onChange={(e) => setCustomHabitName(e.target.value)}
+                placeholder="Habit Name (e.g., Read biology notes)"
+                className="sm:col-span-2 px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+              <input
+                type="number"
+                min="1"
+                max="180"
+                value={customHabitMins}
+                onChange={(e) => setCustomHabitMins(e.target.value)}
+                placeholder="Minutes"
+                className="px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+            <button
+              onClick={handleStartCustomHabit}
+              className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-500/20 flex items-center justify-center space-x-2 transition-all active:scale-[0.99]"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>+ Start Custom Habit</span>
+            </button>
+          </div>
+
           {/* Countdown Clock Display */}
           <div className="bg-slate-50 dark:bg-slate-850 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 text-center relative overflow-hidden">
             
@@ -150,16 +205,21 @@ export const ActiveTimerModal: React.FC<ActiveTimerModalProps> = ({
                 </div>
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">Habit Completed!</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  You are refreshed and ready for your next focus session.
+                  You finished "{activeHabitLabel}". You are refreshed and ready for your next focus session.
                 </p>
               </div>
             ) : (
-              <div className="space-y-2">
-                <span className="text-5xl font-extrabold tracking-tight font-mono text-slate-900 dark:text-white">
-                  {minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')}
-                </span>
+              <div className="space-y-1">
+                <div className="inline-block px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800 text-[11px] font-bold text-indigo-600 dark:text-indigo-300 mb-2">
+                  {activeHabitLabel}
+                </div>
+                <div>
+                  <span className="text-5xl font-extrabold tracking-tight font-mono text-slate-900 dark:text-white">
+                    {minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')}
+                  </span>
+                </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {isRunning ? 'Timer active — take a breath' : 'Ready to begin your rest'}
+                  {isRunning ? 'Timer active — stay focused' : 'Ready to begin your session'}
                 </p>
               </div>
             )}

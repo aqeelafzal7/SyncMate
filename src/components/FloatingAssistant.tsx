@@ -13,9 +13,10 @@ import {
   MicOff,
   Volume2,
   VolumeX,
-  RotateCcw
+  RotateCcw,
+  Key
 } from 'lucide-react';
-import { ChatMessage, UserProfile, Task, PrayerTimings } from '../types';
+import { ChatMessage, UserProfile, Task, PrayerTimings, WeatherData } from '../types';
 import { speakResponse, stopSpeech } from '../lib/audioService';
 
 interface FloatingAssistantProps {
@@ -24,6 +25,7 @@ interface FloatingAssistantProps {
   userProfile: UserProfile;
   tasks: Task[];
   prayerTimings: PrayerTimings | null;
+  weather: WeatherData | null;
   onTaskCreated: (taskData: Omit<Task, 'id'>) => void;
   onTasksRolledOver?: (reorganizedTasks: any[]) => void;
 }
@@ -34,6 +36,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({
   userProfile,
   tasks,
   prayerTimings,
+  weather,
   onTaskCreated,
   onTasksRolledOver,
 }) => {
@@ -55,8 +58,36 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [rolloverLoading, setRolloverLoading] = useState(false);
 
+  // Gemini API Key Management
+  const [customApiKey, setCustomApiKey] = useState<string>(
+    () => localStorage.getItem('syncmate_gemini_api_key') || ''
+  );
+  const [apiKeyInput, setApiKeyInput] = useState<string>(
+    () => localStorage.getItem('syncmate_gemini_api_key') || ''
+  );
+  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
+
   const chatEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+
+  const handleSaveApiKey = () => {
+    const trimmed = apiKeyInput.trim();
+    if (trimmed) {
+      localStorage.setItem('syncmate_gemini_api_key', trimmed);
+      setCustomApiKey(trimmed);
+    } else {
+      localStorage.removeItem('syncmate_gemini_api_key');
+      setCustomApiKey('');
+    }
+    setShowApiKeyModal(false);
+  };
+
+  const handleClearApiKey = () => {
+    localStorage.removeItem('syncmate_gemini_api_key');
+    setCustomApiKey('');
+    setApiKeyInput('');
+    setShowApiKeyModal(false);
+  };
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -136,22 +167,30 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
     setLoading(true);
 
     try {
+      const activeApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mode: 'assistant',
+          customApiKey: activeApiKey,
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
           context: {
             userProfile,
-            currentLocalTime: new Date().toISOString()
+            tasks: tasks.map(t => ({ id: t.id, title: t.title, startTime: t.startTime, endTime: t.endTime, status: t.status })),
+            prayerTimings,
+            weather,
+            currentLocalTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           }
         }),
       });
 
-      if (!res.ok) throw new Error('API request failed');
-
       const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || data.error || 'API request failed');
+      }
+
       const replyText = data.reply || 'I am ready to assist you.';
 
       // Parse potential json_action block
@@ -177,7 +216,8 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
           endTime: td.endTime || '15:00',
           category: td.category || 'work',
           status: 'todo',
-          aiTip: td.aiTip || 'Ensure you take a short break before starting.'
+          aiTip: td.aiTip || 'Ensure you take a short break before starting.',
+          createdAt: new Date().toISOString()
         });
       }
 
@@ -198,23 +238,19 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
         speakResponse(cleanReply);
       }
 
-    } catch (err) {
+    } catch (err: any) {
       console.error('Floating assistant error:', err);
-      // Fallback response with heuristic AI parsing
-      const fallbackReply = generateFallbackTaskLogic(textToSend);
+      const errMsg = err.message || 'Error communicating with Gemini AI.';
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: fallbackReply.reply,
+        content: `⚠️ **SyncMate AI Notice:** ${errMsg}\n\nIf you haven't saved your Gemini API Key, please click the **🔑 API Key** button in the header above to enter your key.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
-      if (fallbackReply.taskToCreate) {
-        onTaskCreated(fallbackReply.taskToCreate);
-      }
       setMessages([...newMessages, aiMsg]);
 
       if (ttsEnabled) {
-        speakResponse(fallbackReply.reply);
+        speakResponse('There was an issue processing your request. Please check your Gemini API key in the header.');
       }
     } finally {
       setLoading(false);
@@ -314,7 +350,8 @@ Once you confirm, I will place it in your schedule with a proactive prep tip!`,
       endTime: `${parseInt(timeStr.split(':')[0], 10) + 1}:00`,
       category: 'work',
       status: 'todo',
-      aiTip: 'Proactive Tip: Set aside a 15-minute preparation buffer right before this task.'
+      aiTip: 'Proactive Tip: Set aside a 15-minute preparation buffer right before this task.',
+      createdAt: new Date().toISOString()
     };
 
     return {
@@ -343,6 +380,20 @@ Once you confirm, I will place it in your schedule with a proactive prep tip!`,
         </div>
 
         <div className="flex items-center space-x-1.5">
+          {/* API Key Manager Button */}
+          <button
+            onClick={() => setShowApiKeyModal(!showApiKeyModal)}
+            className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all flex items-center space-x-1 ${
+              customApiKey
+                ? 'bg-emerald-500/30 text-emerald-200 border-emerald-400/50'
+                : 'bg-amber-500/20 text-amber-200 border-amber-400/40 hover:bg-amber-500/30'
+            }`}
+            title="Configure Gemini API Key"
+          >
+            <Key className="w-3 h-3" />
+            <span>{customApiKey ? 'Key Saved' : '🔑 API Key'}</span>
+          </button>
+
           {/* TTS Toggle */}
           <button
             onClick={() => {
@@ -375,6 +426,46 @@ Once you confirm, I will place it in your schedule with a proactive prep tip!`,
           </button>
         </div>
       </div>
+
+      {/* API Key Modal / Popover */}
+      {showApiKeyModal && (
+        <div className="p-3 bg-slate-900 text-white border-b border-indigo-800 space-y-2 text-xs animate-fadeIn">
+          <div className="flex items-center justify-between font-bold text-indigo-200">
+            <span className="flex items-center space-x-1.5">
+              <Key className="w-3.5 h-3.5 text-amber-300" />
+              <span>Gemini API Key Configuration</span>
+            </span>
+            {customApiKey && <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-800">Key Active ✓</span>}
+          </div>
+          <p className="text-[11px] text-slate-300">
+            Enter your personal Gemini API Key below to enable direct AI integration. Saved securely in browser storage.
+          </p>
+          <div className="flex items-center space-x-2">
+            <input
+              type="password"
+              value={apiKeyInput}
+              onChange={(e) => setApiKeyInput(e.target.value)}
+              placeholder="Paste Gemini API Key (e.g. AIzaSy...)"
+              className="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs outline-none focus:ring-1 focus:ring-indigo-400 font-mono"
+            />
+            <button
+              onClick={handleSaveApiKey}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shrink-0 shadow"
+            >
+              Save
+            </button>
+            {customApiKey && (
+              <button
+                onClick={handleClearApiKey}
+                className="px-2 py-1.5 rounded-lg bg-red-900/50 hover:bg-red-800 text-red-200 font-bold text-xs shrink-0"
+                title="Clear Key"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50/50 dark:bg-slate-900/50">
