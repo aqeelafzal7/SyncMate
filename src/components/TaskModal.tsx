@@ -17,6 +17,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   onSaveTask,
   userId,
 }) => {
+  const getTodayStr = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const [date, setDate] = useState(getTodayStr());
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [startTime, setStartTime] = useState(defaultStartTime || '10:00');
@@ -38,6 +44,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       endTime,
       category,
       status: 'todo',
+      date,
       aiTip: aiTip.trim() || 'Focus on completing core objectives first.'
     });
 
@@ -92,6 +99,19 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Add notes or subtasks..."
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-3 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              Target Date
+            </label>
+            <input
+              type="date"
+              required
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-2 px-3 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
             />
           </div>
 

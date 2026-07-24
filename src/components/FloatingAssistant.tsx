@@ -219,6 +219,43 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
           aiTip: td.aiTip || 'Ensure you take a short break before starting.',
           createdAt: new Date().toISOString()
         });
+      } else if (actionObj && actionObj.action === 'CREATE_FITNESS_PLAN' && Array.isArray(actionObj.data?.tasks)) {
+        const fitnessTasks = actionObj.data.tasks;
+        for (const ft of fitnessTasks) {
+          onTaskCreated({
+            userId: userProfile.uid,
+            title: ft.title || '🏋️ Fitness Focus: Equipment-Free Workout',
+            description: ft.description || 'Zero-equipment bodyweight/stretching routine',
+            startTime: ft.startTime || '06:30',
+            endTime: ft.endTime || '07:00',
+            category: 'health',
+            status: 'todo',
+            aiTip: ft.aiTip || 'Hydrate with 250ml water before starting.',
+            createdAt: new Date().toISOString()
+          });
+        }
+      } else if (actionObj && actionObj.action === 'DECOMPOSE_PROJECT' && Array.isArray(actionObj.data?.tasks)) {
+        const decompTasks = actionObj.data.tasks;
+        const now = new Date();
+        for (const dt of decompTasks) {
+          const dayOffset = typeof dt.dayOffset === 'number' ? dt.dayOffset : 0;
+          const targetDateObj = new Date(now.getTime() + dayOffset * 86400000);
+          const taskDate = `${targetDateObj.getFullYear()}-${String(targetDateObj.getMonth() + 1).padStart(2, '0')}-${String(targetDateObj.getDate()).padStart(2, '0')}`;
+
+          onTaskCreated({
+            userId: userProfile.uid,
+            title: dt.title || 'Project Milestone',
+            description: dt.description || '',
+            startTime: dt.startTime || '10:00',
+            endTime: dt.endTime || '10:45',
+            category: dt.category || 'study',
+            status: 'todo',
+            aiTip: dt.aiTip || 'Focus on step-by-step progress.',
+            projectId: actionObj.data.projectId,
+            date: taskDate,
+            createdAt: new Date().toISOString()
+          });
+        }
       }
 
       // Clean display text without raw json_action block
@@ -499,6 +536,15 @@ Once you confirm, I will place it in your schedule with a proactive prep tip!`,
                 <div className="mt-2.5 p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center space-x-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                   <span className="font-semibold">Task Added to Timeline!</span>
+                </div>
+              )}
+
+              {m.actionData && m.actionData.action === 'CREATE_FITNESS_PLAN' && (
+                <div className="mt-2.5 p-2.5 rounded-xl bg-gradient-to-r from-emerald-900/40 to-teal-900/40 border border-emerald-500/40 text-[11px] text-emerald-200 flex items-center justify-between gap-2 shadow-sm">
+                  <div className="flex items-center space-x-1.5 font-bold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>🏋️ Fitness Routine Scheduled on Timeline!</span>
+                  </div>
                 </div>
               )}
 

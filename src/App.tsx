@@ -352,6 +352,10 @@ export default function App() {
             }}
             onToggleTaskStatus={handleToggleTaskStatus}
             onDeleteTask={handleDeleteTask}
+            onOpenTimerModal={(taskTitle, mins) => {
+              setCompletedTaskTitle(taskTitle);
+              setIsTimerModalOpen(true);
+            }}
           />
         )}
 

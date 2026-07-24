@@ -53,6 +53,7 @@ export interface Task {
   isFixedAnchor?: boolean;
   aiTip?: string;
   projectId?: string;
+  date?: string; // YYYY-MM-DD
   createdAt: string;
 }
 
@@ -63,7 +64,14 @@ export interface Project {
   description: string;
   goals: string[];
   status: 'active' | 'completed' | 'on_hold';
+  pacingStrategy?: 'balanced' | 'steady' | 'intensive';
   createdAt: string;
+}
+
+export interface HabitStreak {
+  name: string;
+  count: number;
+  lastCompletedDate: string; // YYYY-MM-DD
 }
 
 export interface ChatMessage {
@@ -72,7 +80,7 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   actionData?: {
-    action: 'CREATE_TASK' | 'CREATE_PROJECT' | 'UPDATE_PROFILE';
+    action: 'CREATE_TASK' | 'CREATE_PROJECT' | 'UPDATE_PROFILE' | 'CREATE_FITNESS_PLAN';
     data: any;
   };
 }

@@ -31,6 +31,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
   const [decomposingProjectId, setDecomposingProjectId] = useState<string | null>(null);
   const [decomposedMessage, setDecomposedMessage] = useState<{ projectId: string; text: string } | null>(null);
 
+  const [pacingStrategy, setPacingStrategy] = useState<'balanced' | 'steady' | 'intensive'>('balanced');
+
   const handleAddGoal = () => {
     if (!goalInput.trim()) return;
     setGoals([...goals, goalInput.trim()]);
@@ -47,12 +49,14 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
       description: description.trim(),
       goals: goals.length > 0 ? goals : ['Complete project milestone'],
       status: 'active',
+      pacingStrategy,
       createdAt: new Date().toISOString()
     });
 
     setTitle('');
     setDescription('');
     setGoals([]);
+    setPacingStrategy('balanced');
     setShowForm(false);
   };
 
@@ -90,7 +94,13 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
         const actionObj = JSON.parse(match[1]);
         if (actionObj.action === 'DECOMPOSE_PROJECT' && Array.isArray(actionObj.data?.tasks)) {
           const tasksToCreate = actionObj.data.tasks;
+          const now = new Date();
+
           for (const t of tasksToCreate) {
+            const dayOffset = typeof t.dayOffset === 'number' ? t.dayOffset : 0;
+            const targetDateObj = new Date(now.getTime() + dayOffset * 86400000);
+            const taskDate = `${targetDateObj.getFullYear()}-${String(targetDateObj.getMonth() + 1).padStart(2, '0')}-${String(targetDateObj.getDate()).padStart(2, '0')}`;
+
             await onTaskCreated({
               userId,
               title: t.title || `Milestone for ${project.title}`,
@@ -101,12 +111,13 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
               status: 'todo',
               aiTip: t.aiTip || `AI Decomposed milestone for ${project.title}`,
               projectId: project.id,
+              date: taskDate,
               createdAt: new Date().toISOString()
             });
           }
           setDecomposedMessage({
             projectId: project.id,
-            text: `⚡ Scheduled ${tasksToCreate.length} focus milestone slots onto your Daily Timeline!`
+            text: `⚡ Multi-day schedule created! Assigned ${tasksToCreate.length} milestones across your upcoming Daily Timelines according to your ${project.pacingStrategy || 'balanced'} pace.`
           });
         } else {
           throw new Error('Received unexpected AI action response.');
@@ -180,6 +191,64 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
               placeholder="Key deliverables and scope..."
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-2 px-3 text-xs text-slate-900 dark:text-white"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              Multi-Day Pacing Strategy
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setPacingStrategy('balanced')}
+                className={`p-3 rounded-xl border text-left transition-all ${
+                  pacingStrategy === 'balanced'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-500 text-emerald-900 dark:text-emerald-200 ring-2 ring-emerald-500/30'
+                    : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                }`}
+              >
+                <div className="text-xs font-bold flex items-center space-x-1">
+                  <span>🟢 Balanced Pace</span>
+                </div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  1 milestone / day (Recommended)
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPacingStrategy('steady')}
+                className={`p-3 rounded-xl border text-left transition-all ${
+                  pacingStrategy === 'steady'
+                    ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-900 dark:text-amber-200 ring-2 ring-amber-500/30'
+                    : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                }`}
+              >
+                <div className="text-xs font-bold flex items-center space-x-1">
+                  <span>🟡 Steady Pace</span>
+                </div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  1 milestone every 2 days
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPacingStrategy('intensive')}
+                className={`p-3 rounded-xl border text-left transition-all ${
+                  pacingStrategy === 'intensive'
+                    ? 'bg-red-50 dark:bg-red-950/60 border-red-500 text-red-900 dark:text-red-200 ring-2 ring-red-500/30'
+                    : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                }`}
+              >
+                <div className="text-xs font-bold flex items-center space-x-1">
+                  <span>🔴 Intensive Pace</span>
+                </div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Max 2 milestones / day
+                </div>
+              </button>
+            </div>
           </div>
 
           <div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, RotateCcw, X, Bell, Droplets, Eye, Activity, Heart, Sparkles, CheckCircle } from 'lucide-react';
+import { Play, Pause, RotateCcw, X, Bell, Droplets, Eye, Activity, Heart, Sparkles, CheckCircle, Flame } from 'lucide-react';
 import { playCompletionChime } from '../lib/audioService';
+import { incrementHabitStreak, getHabitStreaks } from '../lib/habitService';
 
 interface ActiveTimerModalProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export const ActiveTimerModal: React.FC<ActiveTimerModalProps> = ({
   const [isFinished, setIsFinished] = useState(false);
   const [selectedHabit, setSelectedHabit] = useState<'hydration' | 'eye' | 'stretch' | 'breathing' | 'custom'>('hydration');
   const [activeHabitLabel, setActiveHabitLabel] = useState<string>('Hydration Reset');
+  const [streakResult, setStreakResult] = useState<{ count: number; isExtendedToday: boolean } | null>(null);
 
   // Custom Habit Inputs
   const [customHabitName, setCustomHabitName] = useState('');
@@ -31,7 +33,28 @@ export const ActiveTimerModal: React.FC<ActiveTimerModalProps> = ({
     setSecondsLeft(initialMinutes * 60);
     setIsRunning(false);
     setIsFinished(false);
-  }, [initialMinutes, isOpen]);
+    setStreakResult(null);
+
+    if (taskTitle) {
+      setActiveHabitLabel(taskTitle);
+    }
+  }, [initialMinutes, isOpen, taskTitle]);
+
+  const handleFinishHabit = (habitName: string) => {
+    setIsRunning(false);
+    setIsFinished(true);
+    playCompletionChime();
+
+    // Increment Streak
+    const res = incrementHabitStreak(habitName);
+    setStreakResult({ count: res.count, isExtendedToday: res.isExtendedToday });
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('SyncMate Micro-Habit Complete!', {
+        body: `🔥 ${res.count} Day Streak! Great job completing your ${habitName} session!`,
+      });
+    }
+  };
 
   useEffect(() => {
     let interval: any = null;
@@ -40,14 +63,7 @@ export const ActiveTimerModal: React.FC<ActiveTimerModalProps> = ({
         setSecondsLeft((prev) => prev - 1);
       }, 1000);
     } else if (secondsLeft === 0 && isRunning) {
-      setIsRunning(false);
-      setIsFinished(true);
-      playCompletionChime();
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('SyncMate Micro-Habit Complete!', {
-          body: `Great job completing your ${activeHabitLabel} session!`,
-        });
-      }
+      handleFinishHabit(activeHabitLabel);
     }
     return () => clearInterval(interval);
   }, [isRunning, secondsLeft, activeHabitLabel]);
@@ -199,14 +215,21 @@ export const ActiveTimerModal: React.FC<ActiveTimerModalProps> = ({
             </div>
 
             {isFinished ? (
-              <div className="py-4 space-y-2 animate-bounce">
-                <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto border border-emerald-300 dark:border-emerald-800">
+              <div className="py-4 space-y-3">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto border border-emerald-300 dark:border-emerald-800 animate-bounce">
                   <CheckCircle className="w-6 h-6" />
                 </div>
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">Habit Completed!</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   You finished "{activeHabitLabel}". You are refreshed and ready for your next focus session.
                 </p>
+
+                {streakResult && (
+                  <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-600 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50 text-xs font-extrabold animate-pulse">
+                    <Flame className="w-4 h-4 text-amber-500 fill-amber-500" />
+                    <span>🔥 {streakResult.count} Day Streak {streakResult.isExtendedToday ? 'Extended Today!' : 'Active!'}</span>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-1">
@@ -238,39 +261,51 @@ export const ActiveTimerModal: React.FC<ActiveTimerModalProps> = ({
             </div>
 
             {/* Timer Actions */}
-            <div className="flex items-center justify-center space-x-4 mt-6">
-              <button
-                onClick={() => {
-                  setSecondsLeft(initialMinutes * 60);
-                  setIsRunning(false);
-                  setIsFinished(false);
-                }}
-                className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition-all"
-                title="Reset Timer"
-              >
-                <RotateCcw className="w-5 h-5" />
-              </button>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-6">
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => {
+                    setSecondsLeft(initialMinutes * 60);
+                    setIsRunning(false);
+                    setIsFinished(false);
+                  }}
+                  className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition-all"
+                  title="Reset Timer"
+                >
+                  <RotateCcw className="w-5 h-5" />
+                </button>
 
-              <button
-                onClick={() => setIsRunning(!isRunning)}
-                className={`px-8 py-3.5 rounded-2xl font-bold text-sm shadow-xl flex items-center space-x-2 transition-all ${
-                  isRunning
-                    ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20'
-                    : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20'
-                }`}
-              >
-                {isRunning ? (
-                  <>
-                    <Pause className="w-5 h-5" />
-                    <span>Pause</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-5 h-5 fill-current" />
-                    <span>Start Timer</span>
-                  </>
-                )}
-              </button>
+                <button
+                  onClick={() => setIsRunning(!isRunning)}
+                  className={`px-6 py-3 rounded-2xl font-bold text-xs sm:text-sm shadow-xl flex items-center space-x-2 transition-all ${
+                    isRunning
+                      ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20'
+                      : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20'
+                  }`}
+                >
+                  {isRunning ? (
+                    <>
+                      <Pause className="w-4 h-4" />
+                      <span>Pause</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4 fill-current" />
+                      <span>Start Timer</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {!isFinished && (
+                <button
+                  onClick={() => handleFinishHabit(activeHabitLabel)}
+                  className="px-4 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 flex items-center space-x-1.5 transition-all"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Complete & Record Streak 🔥</span>
+                </button>
+              )}
             </div>
 
           </div>

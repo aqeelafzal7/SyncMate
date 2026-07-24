@@ -160,13 +160,20 @@ Return a JSON object in this format inside a markdown \`\`\`json block:
 
       if (mode === 'decompose_project') {
         const { project, existingTasks, prayerTimings } = context || {};
+        const pacing = project?.pacingStrategy || 'balanced';
         const decomposeSystemInstruction = `You are SyncMate, an elite AI scheduling assistant.
-Your job is to break down the long-term project "${project?.title || 'Project'}" (Description: "${project?.description || ''}", Goals: ${(project?.goals || []).join(', ')}) into 3 to 5 bite-sized 30-to-45-minute daily focus sub-tasks.
+Your job is to break down the long-term project "${project?.title || 'Project'}" (Description: "${project?.description || ''}", Goals: ${(project?.goals || []).join(', ')}) into 3 to 5 structured daily modules/milestones.
 
-CRITICAL TIMELINE RULES:
-1. Do NOT overlap with non-negotiable Islamic prayer times: ${JSON.stringify(prayerTimings || {})}.
-2. Do NOT overlap with existing tasks: ${JSON.stringify(existingTasks?.map((t: any) => ({ startTime: t.startTime, endTime: t.endTime })) || [])}.
-3. Pick open hourly slots between 08:00 and 22:00.
+MULTI-DAY PACING RULES (Pacing Strategy: ${pacing.toUpperCase()}):
+1. DO NOT assign all modules to today!
+2. Assign a relative integer "dayOffset" to each task:
+   - For "balanced" pace (1 milestone/day): Task 1 gets dayOffset: 0, Task 2 gets dayOffset: 1, Task 3 gets dayOffset: 2, etc.
+   - For "steady" pace (1 milestone every 2 days): Task 1 gets dayOffset: 0, Task 2 gets dayOffset: 2, Task 3 gets dayOffset: 4, etc.
+   - For "intensive" pace (max 2 milestones/day): Task 1 gets dayOffset: 0, Task 2 gets dayOffset: 0, Task 3 gets dayOffset: 1, etc.
+3. CRITICAL TIMELINE RULES:
+   - Do NOT overlap with non-negotiable Islamic prayer times: ${JSON.stringify(prayerTimings || {})}.
+   - Do NOT overlap with existing tasks: ${JSON.stringify(existingTasks?.map((t: any) => ({ startTime: t.startTime, endTime: t.endTime })) || [])}.
+   - Pick open hourly slots between 08:00 and 22:00.
 4. Output strictly a markdown JSON code block as follows:
 \`\`\`json_action
 {
@@ -175,10 +182,11 @@ CRITICAL TIMELINE RULES:
     "projectId": "${project?.id || ''}",
     "tasks": [
       {
-        "title": "Clear concise sub-task title",
+        "title": "Clear concise module title",
         "description": "Specific focus milestone detail",
         "startTime": "HH:MM",
         "endTime": "HH:MM",
+        "dayOffset": 0,
         "category": "study" | "work" | "personal",
         "aiTip": "Actionable tip for this milestone"
       }
@@ -189,7 +197,7 @@ CRITICAL TIMELINE RULES:
 
         const response = await ai.models.generateContent({
           model: 'gemini-3.6-flash',
-          contents: [{ role: 'user', parts: [{ text: `Decompose project "${project?.title}" into 3-5 focus tasks.` }] }],
+          contents: [{ role: 'user', parts: [{ text: `Decompose project "${project?.title}" with pacing strategy "${pacing}".` }] }],
           config: {
             systemInstruction: decomposeSystemInstruction,
             temperature: 0.5,
@@ -199,23 +207,87 @@ CRITICAL TIMELINE RULES:
         return res.json({ reply: response.text || '' });
       }
 
-      const systemInstruction = `You are SyncMate, an elite, autonomous AI secretary for Muhammad Aqeel. He is a 3rd-semester Biotechnology undergrad at GCUF, Media Management Head of the Beaconite Quiz Society, and frequently participates in Bait Bazi competitions. You must be conversational, sharp, and highly proactive. If he states a massive or vague goal (like "I want to be Prime Minister"), do NOT give generic responses. Instead, ask practical, clarifying questions about how to take the very first step considering his current university roles and skills.
+      if (mode === 'decompose_fitness') {
+        const { fitnessGoal, existingTasks, prayerTimings } = context || {};
+        const fitnessSystemInstruction = `You are SyncMate, an elite AI Fitness Systems Engineer and Health Coach.
+Your job is to generate a zero-equipment daily workout/stretching routine tailored to the user goal: "${fitnessGoal || 'Zero Equipment Bodyweight & Core Fitness'}" and auto-slot 1 to 2 15-to-30-minute workout blocks into their daily timeline.
 
-CRITICAL OPERATIONAL RULES:
-1. INQUISITIVE & PROACTIVE: When given vague goals, events, or tasks, ask 1-2 sharp, highly targeted clarifying questions tailored to his background (GCUF Biotechnology, Beaconite Quiz Society, Bait Bazi, Media Management).
-2. OBEDIENT YET ADVISORY: Always respect user commands, but offer 1-2 practical, context-aware suggestions (e.g., buffer time, location/weather considerations).
+CRITICAL SCHEDULING & SAFETY RULES:
+1. NEVER schedule workouts during or immediately adjacent to fixed Islamic prayer times: ${JSON.stringify(prayerTimings || {})}.
+2. Prefer energy-boosting slots early morning after Fajr (e.g., 06:30-07:00) or late afternoon before Maghrib (e.g., 17:00-17:30).
+3. Do NOT overlap with existing tasks: ${JSON.stringify(existingTasks?.map((t: any) => ({ startTime: t.startTime, endTime: t.endTime })) || [])}.
+4. Provide exercise names, sets/reps or durations (e.g., 45s Plank, 15 Squats, Cobra Stretch), and proper form tips.
+5. Output strictly a markdown JSON code block as follows:
+\`\`\`json_action
+{
+  "action": "CREATE_FITNESS_PLAN",
+  "data": {
+    "title": "Zero-Equipment Fitness Plan",
+    "tasks": [
+      {
+        "title": "🏋️ Fitness Focus: Core & Bodyweight Routine",
+        "description": "3 Sets: 15 Squats, 45s Plank, 20 Jumping Jacks, Cobra Stretch. Keep back flat and core engaged.",
+        "startTime": "06:30",
+        "endTime": "07:00",
+        "category": "health",
+        "aiTip": "Drink 250ml water before starting. Perfect energy booster after Fajr!"
+      }
+    ]
+  }
+}
+\`\`\``;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.6-flash',
+          contents: [{ role: 'user', parts: [{ text: `Create zero equipment fitness schedule for goal: "${fitnessGoal}".` }] }],
+          config: {
+            systemInstruction: fitnessSystemInstruction,
+            temperature: 0.5,
+          }
+        });
+
+        return res.json({ reply: response.text || '' });
+      }
+
+      const systemInstruction = `You are SyncMate, an elite, autonomous AI secretary and Fitness Coach for Muhammad Aqeel. He is a 3rd-semester Biotechnology undergrad at GCUF, Media Management Head of the Beaconite Quiz Society, and frequently participates in Bait Bazi competitions. You must be conversational, sharp, and highly proactive.
+
+CRITICAL OPERATIONAL & FITNESS RULES:
+1. INQUISITIVE & PROACTIVE: When given vague goals, ask 1-2 sharp clarifying questions. If the user asks for fitness/health goals (e.g. weight loss, height/posture stretching, core strength, no-equipment workouts), ask: "How many days a week can you commit, and what time of day works best (morning or evening)?"
+2. AUTONOMOUS AI FITNESS COACH (Zero Equipment):
+   - When asked for workout or fitness guidance, generate a tailored equipment-free routine (e.g., Jumping Jacks, Bodyweight Squats, Wall Sits, Cobra Stretches, Planks).
+   - Always list exercise names, set/repetition guidelines or duration (e.g. 45s Plank, 3 sets), and form tips.
 3. RELIGION & PRAYER ANCHORS: Keep timeline tasks intelligently scheduled around non-negotiable Islamic prayer times (Fajr, Dhuhr, Asr, Maghrib, Isha).
-4. STRUCTURED ACTION OUTPUT: When finalizing a new task or schedule addition, append a markdown JSON action code block at the very end of your response:
+4. STRUCTURED ACTION OUTPUT: When proposing a task or fitness plan, append a markdown JSON action code block at the end:
+For a single task:
 \`\`\`json_action
 {
   "action": "CREATE_TASK",
   "data": {
-    "title": "Task title",
-    "description": "Short description",
-    "startTime": "HH:MM",
-    "endTime": "HH:MM",
-    "category": "work" | "study" | "personal" | "health",
-    "aiTip": "Contextual advisory tip"
+    "title": "🏋️ Fitness Focus: Core & Bodyweight",
+    "description": "3 Sets: 15 Squats, 45s Plank, Cobra Stretch. Form tip: Engage core.",
+    "startTime": "06:30",
+    "endTime": "07:00",
+    "category": "health",
+    "aiTip": "Scheduled after Fajr prayer for peak mental focus."
+  }
+}
+\`\`\`
+For a full fitness plan:
+\`\`\`json_action
+{
+  "action": "CREATE_FITNESS_PLAN",
+  "data": {
+    "title": "Equipment-Free Fitness Routine",
+    "tasks": [
+      {
+        "title": "🏋️ Fitness Focus: Morning Posture & Mobility",
+        "description": "3 Sets: Cobra Stretch, Wall Sits (45s), Wrist & Spine Roll.",
+        "startTime": "06:30",
+        "endTime": "07:00",
+        "category": "health",
+        "aiTip": "Perform on an yoga mat or carpet."
+      }
+    ]
   }
 }
 \`\`\`
