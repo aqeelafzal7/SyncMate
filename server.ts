@@ -744,9 +744,12 @@ ${JSON.stringify(newReport)}`;
       const { name, occupation, goals, interests, customApiKey } = req.body || {};
       const apiKey = customApiKey || process.env.GEMINI_API_KEY;
 
+      const userName = name || 'User';
+      const userOcc = occupation || 'Student/Professional';
+
       if (!apiKey) {
         return res.json({
-          wish: `Happy Birthday Dear ${name || 'User'}! May your cellular pathways align with exponential growth and boundless energy today. Happy Birthday Dear ${name || 'User'}, wish you all the best and continued success! — From your Autonomous Assistant, SyncMate ⚡`
+          wish: `May your cellular pathways align with exponential growth, boundless energy, and continuous breakthrough achievements. Happy Birthday Dear ${userName}, wish you all the best and continued success! — From your Autonomous Assistant, SyncMate ⚡`
         });
       }
 
@@ -756,17 +759,11 @@ ${JSON.stringify(newReport)}`;
 
       const ai = new GoogleGenAI({ apiKey, httpOptions: { headers } });
 
-      const promptText = `Write a highly creative, 2-sentence birthday wish for ${name || 'User'}.
-STRICT FIELD JARGON RULE: Adapt the vocabulary to match their occupation/interests.
-- User Occupation: ${occupation || 'Student/Professional'}
-- User Goals: ${goals || 'Personal & Professional Mastery'}
-- User Interests: ${interests || 'Growth & Technology'}
-If they study Biology/Biotechnology, use cellular/genetic/biological metaphors.
-If they like Literature/Poetry, use literary or poetic phrasing.
-If they are in Business, use growth/equity metaphors.
-
-MANDATORY CLOSING LINE: End the message strictly with:
-"Happy Birthday Dear ${name || 'User'}, wish you all the best and continued success! — From your Autonomous Assistant, SyncMate ⚡".`;
+      const promptText = `Write a highly creative, 1-sentence birthday wish for the user.
+CONTEXT: The user's occupation/field of study is ${userOcc}.
+CRITICAL RULE 1: You MUST use clever jargon, metaphors, or terminology from their specific field (e.g., if they study Biology/Biotech, use genetic/cellular metaphors. If IT, use code metaphors).
+CRITICAL RULE 2: DO NOT start the message with 'Happy Birthday'. Jump straight into the clever metaphor.
+CRITICAL RULE 3: You MUST end the text EXACTLY with this exact string: ' Happy Birthday Dear ${userName}, wish you all the best and continued success! — From your Autonomous Assistant, SyncMate ⚡'.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3.6-flash',
@@ -778,8 +775,9 @@ MANDATORY CLOSING LINE: End the message strictly with:
       return res.json({ wish: text });
     } catch (err: any) {
       console.warn('Error in /api/birthday-wish:', err);
+      const userName = req.body?.name || 'User';
       return res.json({
-        wish: `Happy Birthday Dear ${req.body?.name || 'User'}! May your personal and professional endeavors flourish with infinite energy and success today. Happy Birthday Dear ${req.body?.name || 'User'}, wish you all the best and continued success! — From your Autonomous Assistant, SyncMate ⚡`
+        wish: `May your cellular pathways align with exponential growth, boundless energy, and continuous breakthrough achievements. Happy Birthday Dear ${userName}, wish you all the best and continued success! — From your Autonomous Assistant, SyncMate ⚡`
       });
     }
   });

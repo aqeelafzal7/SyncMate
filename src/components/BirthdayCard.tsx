@@ -35,7 +35,9 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
     }
 
     const currentYear = new Date().getFullYear();
-    const cacheKey = `syncmate_birthday_wish_${currentYear}`;
+    // Purge old cache key to clear any legacy duplicated wishes
+    localStorage.removeItem(`syncmate_birthday_wish_${currentYear}`);
+    const cacheKey = `syncmate_birthday_wish_v2_${currentYear}`;
     const cachedWish = localStorage.getItem(cacheKey);
 
     if (cachedWish) {
@@ -47,7 +49,7 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
     // Fetch AI Birthday wish with cache & fallback
     const fetchWish = async () => {
       setLoading(true);
-      const fallbackWish = "Happy Birthday! Another fantastic year of growth and focus awaits. Wish you all the best and continued success! — From your Autonomous Assistant, SyncMate ⚡";
+      const fallbackWish = `May your cellular pathways align with exponential growth, boundless energy, and continuous breakthrough achievements. Happy Birthday Dear ${userProfile.name}, wish you all the best and continued success! — From your Autonomous Assistant, SyncMate ⚡`;
 
       try {
         const customApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;

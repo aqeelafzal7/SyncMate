@@ -345,7 +345,7 @@ export const Timeline: React.FC<TimelineProps> = ({
       )}
 
       {/* Control Bar & Stats */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="relative z-[50] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div className="flex items-center space-x-4 text-xs font-medium text-slate-600 dark:text-slate-300">
           <div className="flex items-center space-x-1.5">
             <Clock className="w-4 h-4 text-indigo-500" />
@@ -359,7 +359,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 
         <button
           onClick={() => onAddTaskClick()}
-          className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 flex items-center space-x-2 transition-all"
+          className="relative z-[60] px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 flex items-center space-x-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Add Custom Task</span>
@@ -367,7 +367,7 @@ export const Timeline: React.FC<TimelineProps> = ({
       </div>
 
       {/* Date Navigation Bar */}
-      <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
+      <div className="relative z-[50] bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
         <div className="flex items-center space-x-2 min-w-max">
           <div className="text-xs font-bold text-slate-500 dark:text-slate-400 px-2 flex items-center space-x-1">
             <CalendarIcon className="w-3.5 h-3.5 text-indigo-500" />
@@ -476,7 +476,7 @@ export const Timeline: React.FC<TimelineProps> = ({
       )}
 
       {/* 24-Hour Vertical Timeline */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl relative">
+      <div className="relative z-[50] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl">
         <div className="space-y-6 relative">
           
           {hours.map((hour) => {
