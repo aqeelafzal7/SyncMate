@@ -37,6 +37,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [occupation, setOccupation] = useState(userProfile?.occupation || '');
   const [goals, setGoals] = useState(userProfile?.goals || '');
   const [religion, setReligion] = useState(userProfile?.religion || 'Muslim');
+  const [dob, setDob] = useState(userProfile?.dob || '');
   const [profileSaved, setProfileSaved] = useState(false);
 
   const handleSaveApiKey = (e: React.FormEvent) => {
@@ -60,6 +61,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       occupation: occupation.trim() || userProfile.occupation,
       goals: goals.trim() || userProfile.goals,
       religion: religion as any,
+      dob: dob.trim() || undefined,
       updatedAt: new Date().toISOString()
     };
 
@@ -203,6 +205,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <option value="Jewish">Jewish</option>
               <option value="Other">Other</option>
             </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase text-slate-500 mb-1">
+              🎂 Date of Birth (Birthday Mode Engine)
+            </label>
+            <input
+              type="date"
+              value={dob}
+              onChange={(e) => setDob(e.target.value)}
+              className="w-full py-2.5 px-3.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+            />
           </div>
 
           <div className="flex items-center justify-between pt-2">

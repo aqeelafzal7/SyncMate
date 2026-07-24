@@ -49,16 +49,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <>
       {/* Desktop Persistent Left Sidebar */}
       <aside
-        className={`hidden md:flex flex-col fixed left-0 top-0 h-screen bg-slate-900 border-r border-slate-800 text-white z-40 transition-all duration-300 ${
+        className={`hidden md:flex flex-col fixed left-0 top-0 h-screen bg-slate-900 border-r border-slate-800 text-white z-50 transition-all duration-300 ${
           isCollapsed ? 'w-20' : 'w-64'
         }`}
       >
         {/* Brand Header - Master Brand Anchor */}
         <div className="p-4 flex items-center justify-between border-b border-slate-800/80">
           <div className="flex items-center space-x-3 overflow-hidden">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
-              <Sparkles className="w-5 h-5 animate-pulse" />
-            </div>
+            <img 
+              src="https://i.ibb.co/PztwKQdM/Sync-Mate.png" 
+              alt="SyncMate Logo" 
+              className="w-10 h-10 object-contain rounded-xl shrink-0 shadow-md shadow-indigo-500/20" 
+            />
             {!isCollapsed && (
               <div className="animate-fadeIn">
                 <div className="flex items-center space-x-1.5">
@@ -70,7 +72,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-400 font-medium truncate">
-                  Autonomous Secretary
+                  Autonomous Assistant
                 </p>
               </div>
             )}
@@ -85,7 +87,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        {/* AI Secretary Trigger */}
+        {/* AI Assistant Trigger */}
         <div className="p-3">
           <button
             onClick={onToggleAssistant}
@@ -95,7 +97,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <div className="flex items-center space-x-2.5">
               <Bot className="w-4 h-4 animate-pulse shrink-0 text-indigo-200" />
-              {!isCollapsed && <span>AI Secretary</span>}
+              {!isCollapsed && <span>AI Assistant</span>}
             </div>
             {!isCollapsed && (
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
@@ -151,7 +153,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 onClick={onOpenOnboarding}
                 className="p-1 rounded-lg text-slate-400 hover:text-indigo-400 hover:bg-slate-700 transition-colors"
-                title="Edit Secretary Profile"
+                title="Edit Assistant Profile"
               >
                 <UserCheck className="w-3.5 h-3.5" />
               </button>

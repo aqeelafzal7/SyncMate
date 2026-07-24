@@ -31,6 +31,9 @@ import { TaskModal } from './components/TaskModal';
 import { ProjectsView } from './components/ProjectsView';
 import { ActiveTimerModal } from './components/ActiveTimerModal';
 import { CitySearchModal } from './components/CitySearchModal';
+import { DobCollectionModal } from './components/DobCollectionModal';
+import { BirthdayBalloonsOverlay } from './components/BirthdayBalloonsOverlay';
+import { checkIsBirthday } from './lib/birthdayUtils';
 
 import { Calendar, Target, Bot, Sparkles, Loader2, Timer, MapPin, Sun } from 'lucide-react';
 
@@ -470,6 +473,19 @@ export default function App() {
         onClose={() => setIsCitySearchOpen(false)}
         currentCity={userProfile?.location?.city}
         onSelectLocation={handleUpdateLocation}
+      />
+
+      {/* Retroactive DOB Collection Modal */}
+      {userProfile && !userProfile.dob && !showOnboarding && (
+        <DobCollectionModal
+          userProfile={userProfile}
+          onSaveProfile={(updated) => setUserProfile(updated)}
+        />
+      )}
+
+      {/* 24-Hour Birthday Mode Interactive Balloons & Confetti Overlay */}
+      <BirthdayBalloonsOverlay
+        isBirthdayMode={checkIsBirthday(userProfile?.dob)}
       />
 
     </div>

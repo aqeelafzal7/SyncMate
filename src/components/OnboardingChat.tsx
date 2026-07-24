@@ -38,12 +38,14 @@ export const OnboardingChat: React.FC<OnboardingChatProps> = ({
     occupation: string;
     goals: string;
     religion: string;
+    dob?: string;
     location?: UserLocation;
   }>({
     name: initialProfile?.name || '',
     occupation: initialProfile?.occupation || '',
     goals: initialProfile?.goals || '',
     religion: initialProfile?.religion || '',
+    dob: initialProfile?.dob || '',
     location: initialProfile?.location,
   });
 
@@ -303,6 +305,7 @@ First, **what is your full name**?`,
       occupation: profile.occupation || 'Professional / Student',
       goals: profile.goals || 'Master productivity and focus',
       religion: profile.religion || 'Muslim',
+      dob: profile.dob || undefined,
       location: finalLocation,
       onboarded: true,
       createdAt: initialProfile?.createdAt || new Date().toISOString(),
@@ -475,6 +478,19 @@ First, **what is your full name**?`,
               <span id="profile-occupation" className="text-xs font-bold text-slate-800 dark:text-slate-200 block mt-0.5">
                 {profile.occupation || <span className="text-slate-400 italic font-normal">Waiting for input...</span>}
               </span>
+            </div>
+
+            {/* Date of Birth */}
+            <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+              <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                🎂 Date of Birth (Birthday Mode)
+              </span>
+              <input
+                type="date"
+                value={profile.dob || ''}
+                onChange={(e) => setProfile(p => ({ ...p, dob: e.target.value }))}
+                className="mt-1 w-full text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+              />
             </div>
 
             {/* Long term goals */}

@@ -16,6 +16,7 @@ export interface UserProfile {
   occupation: string;
   goals: string;
   religion: 'Muslim' | 'Christian' | 'Jewish' | 'Hindu' | 'Buddhist' | 'None' | 'Other';
+  dob?: string; // YYYY-MM-DD
   location?: UserLocation;
   onboarded: boolean;
   createdAt: string;

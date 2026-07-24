@@ -269,7 +269,8 @@ export async function fetchHadithByTheme(keyword: string): Promise<HadithData> {
  */
 export async function getEmotionalIslamicInsight(
   currentMood?: string,
-  customApiKey?: string
+  customApiKey?: string,
+  isBirthday?: boolean
 ): Promise<EmotionalInsightResult> {
   const activeMood = currentMood || localStorage.getItem('syncmate_current_mood') || 'Neutral';
   const recentlyShown = getRecentlyShownInsights();
@@ -283,7 +284,8 @@ export async function getEmotionalIslamicInsight(
         customApiKey,
         context: {
           currentMood: activeMood,
-          recentlyShown
+          recentlyShown,
+          isBirthday: Boolean(isBirthday)
         }
       })
     });

@@ -294,9 +294,9 @@ CRITICAL SCHEDULING & SAFETY RULES:
       }
 
       if (mode === 'recommend_islamic_ref') {
-        const { currentMood, recentlyShown } = context || {};
+        const { currentMood, recentlyShown, isBirthday } = context || {};
         const refSystemInstruction = `You are SyncMate's Islamic Reference Router.
-The user's current mood is "${currentMood || 'Neutral'}".
+${isBirthday ? "Today is the user's birthday. Select a Quranic Ayah and authentic Hadith keyword specifically focusing on gratitude for the gift of life, health, the passage of time, and purpose of creation." : `The user's current mood is "${currentMood || 'Neutral'}".`}
 Recommend one highly relevant Quranic Ayah and one relevant authentic Hadith theme that provides comfort, perspective, guidance, or shared joy matching their emotional state.
 
 CRITICAL RULES:
@@ -309,7 +309,7 @@ Output strictly a markdown JSON code block as follows:
 {
   "surah": 94,
   "ayah": 5,
-  "hadithKeyword": "patience",
+  "hadithKeyword": "gratitude",
   "contextHeading": "A reflection for moments when you feel overwhelmed or stressed"
 }
 \`\`\``;
@@ -326,7 +326,7 @@ Output strictly a markdown JSON code block as follows:
         return res.json({ reply: response.text || '' });
       }
 
-      const systemInstruction = `You are SyncMate, an elite, autonomous AI secretary and Fitness Coach for Muhammad Aqeel. He is a 3rd-semester Biotechnology undergrad at GCUF, Media Management Head of the Beaconite Quiz Society, and frequently participates in Bait Bazi competitions. You must be conversational, sharp, and highly proactive.
+      const systemInstruction = `You are SyncMate, an elite, Autonomous AI Assistant and Fitness Coach for Muhammad Aqeel. He is a 3rd-semester Biotechnology undergrad at GCUF, Media Management Head of the Beaconite Quiz Society, and frequently participates in Bait Bazi competitions. You must be conversational, sharp, and highly proactive.
 
 CRITICAL OPERATIONAL & FITNESS RULES:
 1. INQUISITIVE & PROACTIVE: When given vague goals, ask 1-2 sharp clarifying questions. If the user asks for fitness/health goals (e.g. weight loss, height/posture stretching, core strength, no-equipment workouts), ask: "How many days a week can you commit, and what time of day works best (morning or evening)?"
@@ -734,6 +734,52 @@ ${JSON.stringify(newReport)}`;
       console.warn('Error in /api/my-look/compare:', err);
       return res.json({
         progressSummary: "Progress analysis shows steady grooming maintenance and positive posture form across both check-ins."
+      });
+    }
+  });
+
+  // Gemini API Birthday Wish Generator Endpoint
+  app.post('/api/birthday-wish', async (req, res) => {
+    try {
+      const { name, occupation, goals, interests, customApiKey } = req.body || {};
+      const apiKey = customApiKey || process.env.GEMINI_API_KEY;
+
+      if (!apiKey) {
+        return res.json({
+          wish: `Happy Birthday Dear ${name || 'User'}! May your cellular pathways align with exponential growth and boundless energy today. Happy Birthday Dear ${name || 'User'}, wish you all the best and continued success! — From your Autonomous Assistant, SyncMate ⚡`
+        });
+      }
+
+      const headers: Record<string, string> = {};
+      let referer = req.headers.referer || req.headers.origin;
+      if (referer) headers['Referer'] = referer;
+
+      const ai = new GoogleGenAI({ apiKey, httpOptions: { headers } });
+
+      const promptText = `Write a highly creative, 2-sentence birthday wish for ${name || 'User'}.
+STRICT FIELD JARGON RULE: Adapt the vocabulary to match their occupation/interests.
+- User Occupation: ${occupation || 'Student/Professional'}
+- User Goals: ${goals || 'Personal & Professional Mastery'}
+- User Interests: ${interests || 'Growth & Technology'}
+If they study Biology/Biotechnology, use cellular/genetic/biological metaphors.
+If they like Literature/Poetry, use literary or poetic phrasing.
+If they are in Business, use growth/equity metaphors.
+
+MANDATORY CLOSING LINE: End the message strictly with:
+"Happy Birthday Dear ${name || 'User'}, wish you all the best and continued success! — From your Autonomous Assistant, SyncMate ⚡".`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.6-flash',
+        contents: [{ role: 'user', parts: [{ text: promptText }] }],
+        config: { temperature: 0.8 }
+      });
+
+      const text = (response.text || '').trim();
+      return res.json({ wish: text });
+    } catch (err: any) {
+      console.warn('Error in /api/birthday-wish:', err);
+      return res.json({
+        wish: `Happy Birthday Dear ${req.body?.name || 'User'}! May your personal and professional endeavors flourish with infinite energy and success today. Happy Birthday Dear ${req.body?.name || 'User'}, wish you all the best and continued success! — From your Autonomous Assistant, SyncMate ⚡`
       });
     }
   });

@@ -69,14 +69,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onGuestLogin }) => {
         
         {/* Header Branding */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 mb-4 shadow-lg shadow-indigo-500/20">
-            <Sparkles className="w-7 h-7 text-white" />
+          <div className="inline-flex items-center justify-center mb-4">
+            <img 
+              src="https://i.ibb.co/PztwKQdM/Sync-Mate.png" 
+              alt="SyncMate Logo" 
+              className="w-16 h-16 object-contain rounded-2xl shadow-lg shadow-indigo-500/20" 
+            />
           </div>
           <h1 className="text-2xl font-extrabold tracking-tight text-white">
             SyncMate
           </h1>
           <p className="text-xs font-semibold uppercase tracking-widest text-indigo-400 mt-1">
-            Your Autonomous Secretary
+            Your Autonomous Assistant
           </p>
           <p className="text-xs text-slate-400 mt-2">
             AI-driven dynamic scheduling, prayer & focus anchors, and proactive context engine.

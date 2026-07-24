@@ -28,6 +28,8 @@ import {
 import { UserProfile, Task, PrayerTimings, WeatherData } from '../types';
 import { getDangerousHabitStreaks } from '../lib/habitService';
 import { IslamicInsightModal } from './IslamicInsightModal';
+import { BirthdayCard } from './BirthdayCard';
+import { checkIsBirthday, getMsUntilMidnight } from '../lib/birthdayUtils';
 
 interface TimelineProps {
   userProfile: UserProfile;
@@ -55,6 +57,24 @@ export const Timeline: React.FC<TimelineProps> = ({
   const [currentTime, setCurrentTime] = useState(new Date());
   const nowLineRef = useRef<HTMLDivElement>(null);
   const [hasScrolledToNow, setHasScrolledToNow] = useState(false);
+
+  // 24-Hour Birthday Mode State & Midnight Auto-Destruct Engine
+  const [isBirthdayMode, setIsBirthdayMode] = useState<boolean>(() => checkIsBirthday(userProfile.dob));
+
+  useEffect(() => {
+    const isBday = checkIsBirthday(userProfile.dob);
+    setIsBirthdayMode(isBday);
+
+    if (isBday) {
+      const msLeft = getMsUntilMidnight();
+      const timer = setTimeout(() => {
+        // Midnight Auto-Destruct: Unmount card and clear Birthday Mode without page reload!
+        setIsBirthdayMode(false);
+      }, msLeft);
+
+      return () => clearTimeout(timer);
+    }
+  }, [userProfile.dob]);
 
   // Selected Timeline Date State (Default Today)
   const getTodayStr = () => {
@@ -286,6 +306,11 @@ export const Timeline: React.FC<TimelineProps> = ({
 
         </div>
       </div>
+
+      {/* Dynamic 24-Hour Birthday Experience Card */}
+      {isBirthdayMode && (
+        <BirthdayCard userProfile={userProfile} tasks={tasks} />
+      )}
 
       {/* Dangerous Streak Warning Banner */}
       {dangerousStreaks.length > 0 && (
@@ -705,6 +730,7 @@ export const Timeline: React.FC<TimelineProps> = ({
         prayerName={islamicModal.prayerName}
         isOpen={islamicModal.isOpen}
         onClose={() => setIslamicModal({ isOpen: false, prayerName: '' })}
+        isBirthday={isBirthdayMode}
       />
 
     </div>

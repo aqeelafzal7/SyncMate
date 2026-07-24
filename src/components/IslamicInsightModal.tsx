@@ -6,12 +6,14 @@ interface IslamicInsightModalProps {
   prayerName: string;
   isOpen: boolean;
   onClose: () => void;
+  isBirthday?: boolean;
 }
 
 export const IslamicInsightModal: React.FC<IslamicInsightModalProps> = ({
   prayerName,
   isOpen,
   onClose,
+  isBirthday,
 }) => {
   const [step, setStep] = useState<'quran' | 'hadith'>('quran');
   const [loading, setLoading] = useState<boolean>(false);
@@ -38,7 +40,7 @@ export const IslamicInsightModal: React.FC<IslamicInsightModalProps> = ({
       const currentMood = localStorage.getItem('syncmate_current_mood') || 'Neutral';
       setUserMood(currentMood);
 
-      const result = await getEmotionalIslamicInsight(currentMood, activeApiKey);
+      const result = await getEmotionalIslamicInsight(currentMood, activeApiKey, isBirthday);
       
       setQuranData(result.quran);
       setHadithData(result.hadith);

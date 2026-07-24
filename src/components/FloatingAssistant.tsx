@@ -44,7 +44,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({
     {
       id: 'init-1',
       role: 'assistant',
-      content: `Hello ${userProfile.name || 'there'}! I am **SyncMate**, your autonomous secretary. 🤖
+      content: `Hello ${userProfile.name || 'there'}! I am **SyncMate**, your Autonomous Assistant. ⚡
 
 How can I help you today? You can speak or type to schedule tasks, plan projects, or reorganize leftover tasks into optimal focus slots.
 
@@ -423,8 +423,8 @@ Once you confirm, I will place it in your schedule with a proactive prep tip!`,
       {/* Drawer Header */}
       <div className="p-4 bg-gradient-to-r from-indigo-900 to-purple-900 text-white flex items-center justify-between">
         <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center">
-            <Bot className="w-5 h-5 text-indigo-300" />
+          <div className="w-8 h-8 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center p-1">
+            <img src="https://i.ibb.co/PztwKQdM/Sync-Mate.png" alt="SyncMate Logo" className="w-6 h-6 object-contain" />
           </div>
           <div>
             <h3 className="font-bold text-xs sm:text-sm">Talk to SyncMate</h3>

@@ -1,1 +1,36 @@
 @import "tailwindcss";
+
+@keyframes balloonFloat {
+  0% {
+    transform: translateY(110vh) translateX(0px) rotate(0deg);
+  }
+  25% {
+    transform: translateY(75vh) translateX(22px) rotate(6deg);
+  }
+  50% {
+    transform: translateY(45vh) translateX(-22px) rotate(-6deg);
+  }
+  75% {
+    transform: translateY(15vh) translateX(14px) rotate(4deg);
+  }
+  100% {
+    transform: translateY(-30vh) translateX(0px) rotate(0deg);
+  }
+}
+
+@keyframes stringWiggle {
+  0%, 100% {
+    transform: rotate(-4deg);
+  }
+  50% {
+    transform: rotate(4deg);
+  }
+}
+
+.animate-balloon-float {
+  animation: balloonFloat infinite linear;
+}
+
+.animate-string-wiggle {
+  animation: stringWiggle 3.5s ease-in-out infinite;
+}
