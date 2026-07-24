@@ -9,22 +9,30 @@ import {
   updateTaskInFirestore, 
   deleteTaskFromFirestore,
   subscribeUserProjects,
-  addProjectToFirestore
+  addProjectToFirestore,
+  subscribeUserWardrobe,
+  subscribeStyleLogs,
+  subscribeMyLookReports
 } from './lib/firebase';
-import { UserProfile, UserLocation, ThemeMode, Task, Project, PrayerTimings, WeatherData } from './types';
+import { UserProfile, UserLocation, ThemeMode, Task, Project, PrayerTimings, WeatherData, ActiveTab, WardrobeItem, StyleLog, MyLookReport } from './types';
 import { getUserCurrentCoordinates, fetchPrayerTimings, fetchWeatherData } from './lib/contextService';
 
 import { Navbar } from './components/Navbar';
+import { Sidebar } from './components/Sidebar';
 import { AuthScreen } from './components/AuthScreen';
 import { OnboardingChat } from './components/OnboardingChat';
 import { Timeline } from './components/Timeline';
+import { TodayWearView } from './components/TodayWearView';
+import { MyLookView } from './components/MyLookView';
+import { HabitsView } from './components/HabitsView';
+import { SettingsView } from './components/SettingsView';
 import { FloatingAssistant } from './components/FloatingAssistant';
 import { TaskModal } from './components/TaskModal';
 import { ProjectsView } from './components/ProjectsView';
 import { ActiveTimerModal } from './components/ActiveTimerModal';
 import { CitySearchModal } from './components/CitySearchModal';
 
-import { Calendar, Target, Bot, Sparkles, Loader2, Timer } from 'lucide-react';
+import { Calendar, Target, Bot, Sparkles, Loader2, Timer, MapPin, Sun } from 'lucide-react';
 
 export default function App() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -36,8 +44,9 @@ export default function App() {
     return (localStorage.getItem('syncmate_theme') as ThemeMode) || 'dark';
   });
 
-  // App View Mode
-  const [activeTab, setActiveTab] = useState<'timeline' | 'projects'>('timeline');
+  // App View & Sidebar State
+  const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isCitySearchOpen, setIsCitySearchOpen] = useState(false);
@@ -45,6 +54,9 @@ export default function App() {
   // Firestore Data
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [wardrobeItems, setWardrobeItems] = useState<WardrobeItem[]>([]);
+  const [styleLogs, setStyleLogs] = useState<StyleLog[]>([]);
+  const [myLookReports, setMyLookReports] = useState<MyLookReport[]>([]);
 
   // Context Engine State
   const [prayerTimings, setPrayerTimings] = useState<PrayerTimings | null>(null);
@@ -55,6 +67,7 @@ export default function App() {
   const [taskModalDefaultSlot, setTaskModalDefaultSlot] = useState<string | undefined>(undefined);
   const [isTimerModalOpen, setIsTimerModalOpen] = useState(false);
   const [completedTaskTitle, setCompletedTaskTitle] = useState<string | undefined>(undefined);
+
 
   // Theme Sync Effect
   useEffect(() => {
@@ -115,18 +128,25 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Subscribe to Tasks & Projects
+  // Subscribe to Tasks, Projects, Wardrobe & Style Logs
   useEffect(() => {
     if (!userProfile?.uid) return;
 
     const unsubTasks = subscribeUserTasks(userProfile.uid, (data) => setTasks(data));
     const unsubProjects = subscribeUserProjects(userProfile.uid, (data) => setProjects(data));
+    const unsubWardrobe = subscribeUserWardrobe(userProfile.uid, (data) => setWardrobeItems(data));
+    const unsubStyleLogs = subscribeStyleLogs(userProfile.uid, (data) => setStyleLogs(data));
+    const unsubMyLook = subscribeMyLookReports(userProfile.uid, (data) => setMyLookReports(data));
 
     return () => {
       unsubTasks();
       unsubProjects();
+      unsubWardrobe();
+      unsubStyleLogs();
+      unsubMyLook();
     };
   }, [userProfile?.uid]);
+
 
   // Load Location & Context Engine Data (Prayer Timings + Weather)
   useEffect(() => {
@@ -297,101 +317,119 @@ export default function App() {
     );
   }
 
-  // Main Dashboard
+  // Main Executive Lifestyle OS Layout
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200 pb-20">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
       
-      {/* Top Navigation */}
-      <Navbar
+      {/* Persistent Left Sidebar Navigation */}
+      <Sidebar
+        activeTab={activeTab}
+        onSelectTab={(tab) => {
+          setActiveTab(tab);
+        }}
         userProfile={userProfile}
-        theme={theme}
-        onThemeChange={setTheme}
-        weather={weather}
-        locationName={userProfile?.location?.city}
-        onOpenCitySearch={() => setIsCitySearchOpen(true)}
         onSignOut={handleSignOut}
         onOpenOnboarding={() => setShowOnboarding(true)}
         onToggleAssistant={() => setIsAssistantOpen(!isAssistantOpen)}
-        isAssistantOpen={isAssistantOpen}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />
 
-      {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+      {/* Main Content Area (Offset for Desktop Sidebar) */}
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:pl-20' : 'md:pl-64'}`}>
         
-        {/* Navigation Tabs */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setActiveTab('timeline')}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'timeline'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900'
-              }`}
-            >
-              <Calendar className="w-4 h-4" />
-              <span>Dynamic Daily Timeline</span>
-            </button>
+        {/* Top Header Navbar */}
+        <Navbar
+          userProfile={userProfile}
+          theme={theme}
+          onThemeChange={setTheme}
+          weather={weather}
+          locationName={userProfile?.location?.city}
+          onOpenCitySearch={() => setIsCitySearchOpen(true)}
+          onSignOut={handleSignOut}
+          onOpenOnboarding={() => setShowOnboarding(true)}
+          onToggleAssistant={() => setIsAssistantOpen(!isAssistantOpen)}
+          isAssistantOpen={isAssistantOpen}
+        />
 
-            <button
-              onClick={() => setActiveTab('projects')}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'projects'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900'
-              }`}
-            >
-              <Target className="w-4 h-4" />
-              <span>Long-Term Projects</span>
-            </button>
-          </div>
+        {/* Dynamic View Router */}
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-28 space-y-6">
+          
+          {/* Dashboard View (Timeline) */}
+          {activeTab === 'dashboard' && userProfile && (
+            <Timeline
+              userProfile={userProfile}
+              tasks={tasks}
+              prayerTimings={prayerTimings}
+              weather={weather}
+              onAddTaskClick={(slot) => {
+                setTaskModalDefaultSlot(slot);
+                setIsTaskModalOpen(true);
+              }}
+              onToggleTaskStatus={handleToggleTaskStatus}
+              onDeleteTask={handleDeleteTask}
+              onOpenTimerModal={(taskTitle, mins) => {
+                setCompletedTaskTitle(taskTitle);
+                setIsTimerModalOpen(true);
+              }}
+              onOpenCitySearch={() => setIsCitySearchOpen(true)}
+            />
+          )}
 
-          <button
-            onClick={() => {
-              setCompletedTaskTitle(undefined);
-              setIsTimerModalOpen(true);
-            }}
-            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center space-x-2 transition-all"
-          >
-            <Timer className="w-4 h-4" />
-            <span>Micro-Habit & Rest Timer</span>
-          </button>
-        </div>
+          {/* Today Wear View (Wardrobe & AI Stylist Engine) */}
+          {activeTab === 'today_wear' && (
+            <TodayWearView
+              wardrobeItems={wardrobeItems}
+              userProfile={userProfile}
+              weather={weather}
+              tasks={tasks}
+              onOutfitSelected={() => setActiveTab('my_look')}
+            />
+          )}
 
-        {/* Tab Content */}
-        {activeTab === 'timeline' && userProfile && (
-          <Timeline
-            userProfile={userProfile}
-            tasks={tasks}
-            prayerTimings={prayerTimings}
-            weather={weather}
-            onAddTaskClick={(slot) => {
-              setTaskModalDefaultSlot(slot);
-              setIsTaskModalOpen(true);
-            }}
-            onToggleTaskStatus={handleToggleTaskStatus}
-            onDeleteTask={handleDeleteTask}
-            onOpenTimerModal={(taskTitle, mins) => {
-              setCompletedTaskTitle(taskTitle);
-              setIsTimerModalOpen(true);
-            }}
-            onOpenCitySearch={() => setIsCitySearchOpen(true)}
-          />
-        )}
+          {/* My Look View (Active Look, Biometrics & Style Logs) */}
+          {activeTab === 'my_look' && (
+            <MyLookView
+              myLookReports={myLookReports}
+              styleLogs={styleLogs}
+              wardrobeItems={wardrobeItems}
+              userProfile={userProfile}
+              onGoToStylist={() => setActiveTab('today_wear')}
+            />
+          )}
 
-        {activeTab === 'projects' && userProfile && (
-          <ProjectsView
-            projects={projects}
-            onAddProject={handleAddProject}
-            onTaskCreated={handleSaveTask}
-            userId={userProfile.uid}
-            userProfile={userProfile}
-            prayerTimings={prayerTimings}
-            existingTasks={tasks}
-          />
-        )}
+          {/* Projects View */}
+          {activeTab === 'projects' && userProfile && (
+            <ProjectsView
+              projects={projects}
+              onAddProject={handleAddProject}
+              onTaskCreated={handleSaveTask}
+              userId={userProfile.uid}
+              userProfile={userProfile}
+              prayerTimings={prayerTimings}
+              existingTasks={tasks}
+            />
+          )}
 
-      </main>
+          {/* Habits View */}
+          {activeTab === 'habits' && (
+            <HabitsView userProfile={userProfile} />
+          )}
+
+          {/* Settings View */}
+          {activeTab === 'settings' && (
+            <SettingsView
+              userProfile={userProfile}
+              theme={theme}
+              onThemeChange={setTheme}
+              onOpenCitySearch={() => setIsCitySearchOpen(true)}
+              onUpdateProfile={(updated) => setUserProfile(updated)}
+            />
+          )}
+
+        </main>
+
+      </div>
 
       {/* Task Creation Modal */}
       {userProfile && (
@@ -437,3 +475,4 @@ export default function App() {
     </div>
   );
 }
+

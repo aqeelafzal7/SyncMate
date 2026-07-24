@@ -12,6 +12,7 @@ export interface UserProfile {
   uid: string;
   email: string;
   name: string;
+  gender?: 'male' | 'female' | 'other' | string;
   occupation: string;
   goals: string;
   religion: 'Muslim' | 'Christian' | 'Jewish' | 'Hindu' | 'Buddhist' | 'None' | 'Other';
@@ -39,7 +40,62 @@ export interface WeatherData {
   isDay: boolean;
 }
 
-export type TaskStatus = 'todo' | 'in_progress' | 'completed';
+export type ActiveTab = 'dashboard' | 'today_wear' | 'my_look' | 'projects' | 'habits' | 'settings';
+
+export type WardrobeCategory = 'Tops' | 'Bottoms' | 'Traditional' | 'Footwear' | 'Watches' | 'Glasses' | 'Custom' | string;
+
+export interface WardrobeItemTags {
+  color?: string;
+  formalityLevel?: 'Casual' | 'Smart Casual' | 'Formal' | 'Traditional' | 'Athletic';
+  season?: 'All Season' | 'Summer' | 'Winter' | 'Spring/Autumn';
+  recommendedCategory?: string;
+  description?: string;
+  targetGender?: 'male' | 'female' | 'unisex' | string;
+}
+
+export interface WardrobeItem {
+  id: string;
+  userId: string;
+  name: string;
+  category: WardrobeCategory;
+  imageUrl: string;
+  status: 'clean' | 'in_laundry';
+  tags?: WardrobeItemTags;
+  createdAt: string;
+}
+
+export interface StylistOutfitOption {
+  id: string;
+  title: string; // e.g. "Option A: Executive Sharp"
+  vibe: string;  // e.g. "Best Fit for High Impact Meetings"
+  itemIds: string[];
+  styleNotes: string;
+}
+
+export interface StyleLog {
+  id: string;
+  userId: string;
+  date: string; // YYYY-MM-DD
+  outfitTitle: string;
+  vibe: string;
+  styleNotes: string;
+  itemIds: string[];
+  createdAt: string;
+}
+
+export interface MyLookReport {
+  id: string;
+  userId: string;
+  imageUrl: string;
+  faceShape: string;
+  groomingFeedback: string;
+  suggestedHaircut: string;
+  suggestedBeard: string;
+  fitnessPosture: string;
+  overallScore: number;
+  progressSummary?: string;
+  createdAt: string;
+}
 
 export interface Task {
   id: string;
