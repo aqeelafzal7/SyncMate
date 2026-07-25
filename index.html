@@ -2,8 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
+    <!-- Viewport lock prevents accidental pinch-to-zoom on mobile, making it feel like a native app -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    
+    <!-- App Title & SEO -->
+    <title>SyncMate | Autonomous Assistant</title>
+    <meta name="description" content="Your Autonomous AI Secretary with Chat-Based Onboarding and Intelligent Profile Scheduling" />
+    
+    <!-- Mobile Browser Theme Color (Matches your dark background) -->
+    <meta name="theme-color" content="#090A0F" />
+    
+    <!-- Official SyncMate Favicon -->
+    <link rel="icon" type="image/png" href="https://i.ibb.co/PztwKQdM/Sync-Mate.png" />
+    <link rel="apple-touch-icon" href="https://i.ibb.co/PztwKQdM/Sync-Mate.png" />
+    
   </head>
   <body>
     <div id="root"></div>
@@ -11,4 +23,3 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
