@@ -42,15 +42,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const navItems = [
     { id: 'dashboard' as ActiveTab, label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'daily_strategy' as ActiveTab, label: 'Daily Strategy', icon: Target, badge: '4 AM' },
     { id: 'today_wear' as ActiveTab, label: 'Today Wear', icon: Shirt, badge: 'AI' },
     { id: 'my_look' as ActiveTab, label: 'My Look', icon: Sparkles },
-    { id: 'projects' as ActiveTab, label: 'Projects', icon: Target },
+    { id: 'projects' as ActiveTab, label: 'Projects', icon: UserCheck },
     { id: 'habits' as ActiveTab, label: 'Habits', icon: CheckCircle2 },
     { id: 'settings' as ActiveTab, label: 'Settings', icon: Settings },
   ];
 
   // Reserve bottom floating nav ONLY for core primary tabs (Dashboard, Today Wear, My Look, Habits)
-  const primaryBottomNavItems = navItems.filter((item) => item.id !== 'projects' && item.id !== 'settings');
+  const primaryBottomNavItems = navItems.filter((item) => item.id !== 'projects' && item.id !== 'settings' && item.id !== 'daily_strategy');
 
   const handleSelectTab = (tab: ActiveTab) => {
     onSelectTab(tab);

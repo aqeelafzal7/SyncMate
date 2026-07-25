@@ -597,6 +597,57 @@ Output strictly a markdown JSON code block as follows:
         return res.json({ reply: response.text || '' });
       }
 
+      if (mode === 'daily_strategy') {
+        const { userProfile, weather, tasks } = context || {};
+        const strategySystemInstruction = `You are SyncMate's Executive Performance & Health Strategist.
+Analyze the user's health biometrics, schedule, and live weather conditions to construct a Daily Survival & Executive Strategy.
+
+User Profile:
+- Name: ${userProfile?.name || 'User'}
+- Age: ${userProfile?.age || 'N/A'} (DOB: ${userProfile?.dob || 'N/A'})
+- Height: ${userProfile?.height || 'N/A'}
+- Weight: ${userProfile?.weight || 'N/A'}
+- Occupation: ${userProfile?.occupation || 'N/A'}
+- Goals: ${userProfile?.goals || 'N/A'}
+- Religion: ${userProfile?.religion || 'N/A'}
+
+Live Context:
+- Weather: ${weather ? `${weather.temperature}°C, ${weather.condition}` : 'Clear'}
+- Scheduled Tasks Today: ${JSON.stringify(tasks || [])}
+
+Rules:
+1. Provide 4 to 6 high-impact actionable items for "doList" (what to DO today for peak energy, hydration, posture, and schedule alignment).
+2. Provide 4 to 6 strict pitfalls/hazards for "dontList" (what NOT to do today based on weather, energy depletion, health/body weight, or schedule conflicts).
+3. Provide a short executive summary (1-2 sentences).
+4. Output MUST be strictly a markdown JSON code block as follows:
+\`\`\`json
+{
+  "summary": "Short executive summary...",
+  "doList": [
+    "Prioritize deep focus slot before noon",
+    "Drink at least 3L water given 28°C weather",
+    "Maintain upright posture during desk sessions"
+  ],
+  "dontList": [
+    "Do not skip hydration during high-intensity focus slots",
+    "Avoid heavy carb meals right before high-priority focus slots",
+    "Do not ignore posture warning signs"
+  ]
+}
+\`\`\``;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.6-flash',
+          contents: [{ role: 'user', parts: [{ text: `Generate daily executive strategy for ${userProfile?.name || 'User'}.` }] }],
+          config: {
+            systemInstruction: strategySystemInstruction,
+            temperature: 0.5,
+          }
+        });
+
+        return res.json({ reply: response.text || '' });
+      }
+
       const systemInstruction = `You are SyncMate, an elite, Autonomous AI Assistant and Fitness Coach for Muhammad Aqeel. He is a 3rd-semester Biotechnology undergrad at GCUF, Media Management Head of the Beaconite Quiz Society, and frequently participates in Bait Bazi competitions. You must be conversational, sharp, and highly proactive.
 
 CRITICAL OPERATIONAL & FITNESS RULES:

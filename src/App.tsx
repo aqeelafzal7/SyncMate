@@ -22,6 +22,7 @@ import { Sidebar } from './components/Sidebar';
 import { AuthScreen } from './components/AuthScreen';
 import { OnboardingChat } from './components/OnboardingChat';
 import { Timeline } from './components/Timeline';
+import { DailyStrategyView } from './components/DailyStrategyView';
 import { TodayWearView } from './components/TodayWearView';
 import { MyLookView } from './components/MyLookView';
 import { HabitsView } from './components/HabitsView';
@@ -395,6 +396,16 @@ export default function App() {
                 setActiveTab('habits');
               }}
               onOpenCitySearch={() => setIsCitySearchOpen(true)}
+              onOpenStrategy={() => setActiveTab('daily_strategy')}
+            />
+          )}
+
+          {/* Daily Executive Strategy View */}
+          {activeTab === 'daily_strategy' && userProfile && (
+            <DailyStrategyView
+              userProfile={userProfile}
+              weather={weather}
+              tasks={tasks}
             />
           )}
 

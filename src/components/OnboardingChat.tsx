@@ -14,6 +14,20 @@ import {
 import { UserProfile, ChatMessage, UserLocation } from '../types';
 import { getUserCurrentCoordinates } from '../lib/contextService';
 
+// Helper to calculate age from DOB
+export const calculateAge = (dobString?: string): number | undefined => {
+  if (!dobString) return undefined;
+  const birthDate = new Date(dobString);
+  if (isNaN(birthDate.getTime())) return undefined;
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age >= 0 ? age : undefined;
+};
+
 interface OnboardingChatProps {
   initialProfile?: UserProfile | null;
   onComplete: (profile: UserProfile) => void;
@@ -39,13 +53,17 @@ export const OnboardingChat: React.FC<OnboardingChatProps> = ({
     goals: string;
     religion: string;
     dob?: string;
+    height?: string;
+    weight?: string;
     location?: UserLocation;
   }>({
     name: initialProfile?.name || '',
     occupation: initialProfile?.occupation || '',
     goals: initialProfile?.goals || '',
     religion: initialProfile?.religion || '',
-    dob: initialProfile?.dob || '',
+    dob: initialProfile?.dob || '2004-01-15',
+    height: initialProfile?.height || '175 cm',
+    weight: initialProfile?.weight || '70 kg',
     location: initialProfile?.location,
   });
 
@@ -306,14 +324,19 @@ First, **what is your full name**?`,
       }
     }
 
+    const computedAge = calculateAge(profile.dob || initialProfile?.dob);
+
     const finalProfile: UserProfile = {
       uid: initialProfile?.uid || `user_${Date.now()}`,
       email: initialProfile?.email || 'user@syncmate.ai',
       name: profile.name || 'SyncMate User',
       occupation: profile.occupation || 'Professional / Student',
       goals: profile.goals || 'Master productivity and focus',
-      religion: profile.religion || 'Muslim',
+      religion: (profile.religion as any) || 'Muslim',
       dob: profile.dob || undefined,
+      age: computedAge,
+      height: profile.height || '175 cm',
+      weight: profile.weight || '70 kg',
       location: finalLocation,
       onboarded: true,
       createdAt: initialProfile?.createdAt || new Date().toISOString(),
@@ -488,17 +511,52 @@ First, **what is your full name**?`,
               </span>
             </div>
 
-            {/* Date of Birth */}
+            {/* Date of Birth & Age */}
             <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
-              <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                🎂 Date of Birth (Birthday Mode)
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  🎂 Date of Birth & Age
+                </span>
+                {profile.dob && calculateAge(profile.dob) !== undefined && (
+                  <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                    Age: {calculateAge(profile.dob)}
+                  </span>
+                )}
+              </div>
               <input
                 type="date"
                 value={profile.dob || ''}
                 onChange={(e) => setProfile(p => ({ ...p, dob: e.target.value }))}
                 className="mt-1 w-full text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
               />
+            </div>
+
+            {/* Height & Weight */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+                <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  📏 Height
+                </span>
+                <input
+                  type="text"
+                  placeholder="e.g. 175 cm"
+                  value={profile.height || ''}
+                  onChange={(e) => setProfile(p => ({ ...p, height: e.target.value }))}
+                  className="mt-1 w-full text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+                <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  ⚖️ Weight
+                </span>
+                <input
+                  type="text"
+                  placeholder="e.g. 70 kg"
+                  value={profile.weight || ''}
+                  onChange={(e) => setProfile(p => ({ ...p, weight: e.target.value }))}
+                  className="mt-1 w-full text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
             </div>
 
             {/* Long term goals */}

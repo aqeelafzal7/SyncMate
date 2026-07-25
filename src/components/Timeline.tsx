@@ -45,6 +45,7 @@ interface TimelineProps {
   onDeleteTask: (taskId: string) => void;
   onOpenTimerModal?: (taskTitle?: string, mins?: number) => void;
   onOpenCitySearch?: () => void;
+  onOpenStrategy?: () => void;
 }
 
 export const Timeline: React.FC<TimelineProps> = ({
@@ -60,10 +61,31 @@ export const Timeline: React.FC<TimelineProps> = ({
   onDeleteTask,
   onOpenTimerModal,
   onOpenCitySearch,
+  onOpenStrategy,
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const nowLineRef = useRef<HTMLDivElement>(null);
   const [hasScrolledToNow, setHasScrolledToNow] = useState(false);
+
+  // Strategy Notification Banner state
+  const [hasTodayStrategy, setHasTodayStrategy] = useState<boolean>(() => {
+    try {
+      const todayDate = new Date().toISOString().split('T')[0];
+      return Boolean(localStorage.getItem(`syncmate_strategy_${todayDate}`));
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const todayDate = new Date().toISOString().split('T')[0];
+    const check = () => {
+      setHasTodayStrategy(Boolean(localStorage.getItem(`syncmate_strategy_${todayDate}`)));
+    };
+    check();
+    window.addEventListener('storage', check);
+    return () => window.removeEventListener('storage', check);
+  }, []);
 
   // 24-Hour Birthday Mode State & Midnight Auto-Destruct Engine
   const [isBirthdayMode, setIsBirthdayMode] = useState<boolean>(() => checkIsBirthday(userProfile.dob));
@@ -277,6 +299,32 @@ export const Timeline: React.FC<TimelineProps> = ({
   return (
     <div className="space-y-6">
       
+      {/* 🔔 Daily Executive Strategy Notification Banner */}
+      {hasTodayStrategy && onOpenStrategy && (
+        <div 
+          onClick={onOpenStrategy}
+          className="p-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 text-white shadow-lg shadow-emerald-600/20 flex items-center justify-between cursor-pointer hover:opacity-95 transition-all transform active:scale-[0.99] border border-emerald-400/30"
+        >
+          <div className="flex items-center space-x-3">
+            <div className="p-2 rounded-xl bg-white/20 backdrop-blur-md shrink-0">
+              <Target className="w-5 h-5 text-emerald-200 animate-pulse" />
+            </div>
+            <div>
+              <p className="text-xs sm:text-sm font-bold leading-tight">
+                🔔 SyncMate has generated your Daily Survival & Strategy List based on today's weather and schedule.
+              </p>
+              <p className="text-[11px] text-emerald-100 font-medium mt-0.5">
+                Calibrated for health biometrics, hydration, & focus. Tap to view your DO & DO NOT list.
+              </p>
+            </div>
+          </div>
+          <div className="hidden sm:flex items-center space-x-1 text-xs font-bold bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-xl backdrop-blur-md transition-all shrink-0 ml-3">
+            <span>View Strategy</span>
+            <ChevronRight className="w-4 h-4" />
+          </div>
+        </div>
+      )}
+
       {/* Dynamic Header Banner */}
       <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-purple-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
         

@@ -18,6 +18,9 @@ export interface UserProfile {
   goals: string;
   religion: 'Muslim' | 'Christian' | 'Jewish' | 'Hindu' | 'Buddhist' | 'None' | 'Other';
   dob?: string; // YYYY-MM-DD
+  age?: number;
+  height?: string;
+  weight?: string;
   location?: UserLocation;
   onboarded: boolean;
   activeMood?: string;
@@ -43,7 +46,7 @@ export interface WeatherData {
   isDay: boolean;
 }
 
-export type ActiveTab = 'dashboard' | 'today_wear' | 'my_look' | 'projects' | 'habits' | 'settings';
+export type ActiveTab = 'dashboard' | 'daily_strategy' | 'today_wear' | 'my_look' | 'projects' | 'habits' | 'settings';
 
 export type WardrobeCategory = 'Tops' | 'Bottoms' | 'Traditional' | 'Footwear' | 'Watches' | 'Glasses' | 'Custom' | string;
 
