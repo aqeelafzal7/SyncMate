@@ -138,10 +138,10 @@ export const IslamicInsightModal: React.FC<IslamicInsightModalProps> = ({
               <div className="space-y-6 animate-fadeIn">
                 
                 {/* Arabic Ayah - Large Prominent Card */}
-                <div className="p-8 sm:p-10 rounded-3xl bg-slate-950/90 border border-amber-500/40 text-center shadow-2xl relative overflow-hidden">
+                <div className="p-3 sm:p-5 rounded-3xl bg-slate-950/90 border border-amber-500/40 text-center shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
                   <p 
-                    className="text-3xl sm:text-4xl leading-[2.5] sm:leading-[3] px-2 sm:px-6 text-amber-200 font-serif tracking-wide py-4 break-words whitespace-normal text-center w-full"
+                    className="text-xl sm:text-3xl leading-[2.2] sm:leading-loose px-2 sm:px-6 text-amber-200 font-serif tracking-wide py-4 break-words whitespace-normal text-center w-full"
                     dir="rtl"
                   >
                     « {quranData.arabic} »
@@ -227,9 +227,9 @@ export const IslamicInsightModal: React.FC<IslamicInsightModalProps> = ({
                 
                 {/* Arabic Hadith if available */}
                 {hadithData.arabic && (
-                  <div className="p-8 sm:p-10 rounded-3xl bg-slate-950/90 border border-amber-500/40 text-center shadow-2xl">
+                  <div className="p-3 sm:p-5 rounded-3xl bg-slate-950/90 border border-amber-500/40 text-center shadow-2xl">
                     <p 
-                      className="text-3xl sm:text-4xl leading-[2.5] sm:leading-[3] px-2 sm:px-6 text-amber-200 font-serif py-2 break-words whitespace-normal text-center w-full"
+                      className="text-xl sm:text-3xl leading-[2.2] sm:leading-loose px-2 sm:px-6 text-amber-200 font-serif py-2 break-words whitespace-normal text-center w-full"
                       dir="rtl"
                     >
                       « {hadithData.arabic} »

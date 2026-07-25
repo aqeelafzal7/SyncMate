@@ -69,6 +69,9 @@ export default function App() {
   // Modal State
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [taskModalDefaultSlot, setTaskModalDefaultSlot] = useState<string | undefined>(undefined);
+  const [isTimelineModalOpen, setIsTimelineModalOpen] = useState(false);
+
+  const hideBottomNav = isMobileSidebarOpen || isAssistantOpen || isCitySearchOpen || isTaskModalOpen || isTimelineModalOpen || showOnboarding;
 
 
   // Theme Sync Effect
@@ -356,6 +359,7 @@ export default function App() {
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         isMobileSidebarOpen={isMobileSidebarOpen}
         onCloseMobileSidebar={() => setIsMobileSidebarOpen(false)}
+        hideBottomNav={hideBottomNav}
       />
 
       {/* Main Content Area (Offset for Desktop Sidebar) */}
@@ -397,6 +401,7 @@ export default function App() {
               }}
               onOpenCitySearch={() => setIsCitySearchOpen(true)}
               onOpenStrategy={() => setActiveTab('daily_strategy')}
+              onIslamicModalChange={setIsTimelineModalOpen}
             />
           )}
 

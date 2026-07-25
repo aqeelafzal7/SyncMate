@@ -26,6 +26,7 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   isMobileSidebarOpen?: boolean;
   onCloseMobileSidebar?: () => void;
+  hideBottomNav?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -39,6 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleCollapse,
   isMobileSidebarOpen = false,
   onCloseMobileSidebar,
+  hideBottomNav = false,
 }) => {
   const navItems = [
     { id: 'dashboard' as ActiveTab, label: 'Dashboard', icon: LayoutDashboard },
@@ -216,7 +218,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Mobile Floating Bottom Navbar */}
       <nav className={`md:hidden fixed bottom-3 left-3 right-3 z-[100] bg-slate-900/90 backdrop-blur-xl border border-slate-800/90 rounded-3xl p-2 shadow-2xl flex items-center justify-around text-white transition-all duration-500 ease-in-out ${
-        isMobileSidebarOpen ? 'opacity-0 translate-y-12 pointer-events-none' : 'opacity-100 translate-y-0'
+        (hideBottomNav || isMobileSidebarOpen) ? 'opacity-0 translate-y-12 pointer-events-none' : 'opacity-100 translate-y-0'
       }`}>
         {primaryBottomNavItems.map((item) => {
           const Icon = item.icon;

@@ -46,6 +46,7 @@ interface TimelineProps {
   onOpenTimerModal?: (taskTitle?: string, mins?: number) => void;
   onOpenCitySearch?: () => void;
   onOpenStrategy?: () => void;
+  onIslamicModalChange?: (isOpen: boolean) => void;
 }
 
 export const Timeline: React.FC<TimelineProps> = ({
@@ -62,6 +63,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   onOpenTimerModal,
   onOpenCitySearch,
   onOpenStrategy,
+  onIslamicModalChange,
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const nowLineRef = useRef<HTMLDivElement>(null);
@@ -77,10 +79,20 @@ export const Timeline: React.FC<TimelineProps> = ({
     }
   });
 
+  const [hasViewedStrategy, setHasViewedStrategy] = useState<boolean>(() => {
+    try {
+      const todayDate = new Date().toISOString().split('T')[0];
+      return localStorage.getItem(`syncmate_strategy_viewed_${todayDate}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
   useEffect(() => {
     const todayDate = new Date().toISOString().split('T')[0];
     const check = () => {
       setHasTodayStrategy(Boolean(localStorage.getItem(`syncmate_strategy_${todayDate}`)));
+      setHasViewedStrategy(localStorage.getItem(`syncmate_strategy_viewed_${todayDate}`) === 'true');
     };
     check();
     window.addEventListener('storage', check);
@@ -162,6 +174,10 @@ export const Timeline: React.FC<TimelineProps> = ({
     isOpen: false,
     prayerName: ''
   });
+
+  useEffect(() => {
+    onIslamicModalChange?.(islamicModal.isOpen);
+  }, [islamicModal.isOpen, onIslamicModalChange]);
 
   const handleTogglePrayerComplete = (prayerKey: string, prayerName: string) => {
     const itemKey = `${selectedDate}_${prayerKey}`;
@@ -300,9 +316,14 @@ export const Timeline: React.FC<TimelineProps> = ({
     <div className="space-y-6">
       
       {/* 🔔 Daily Executive Strategy Notification Banner */}
-      {hasTodayStrategy && onOpenStrategy && (
+      {hasTodayStrategy && !hasViewedStrategy && onOpenStrategy && (
         <div 
-          onClick={onOpenStrategy}
+          onClick={() => {
+            const todayStr = new Date().toISOString().split('T')[0];
+            localStorage.setItem('syncmate_strategy_viewed_' + todayStr, 'true');
+            setHasViewedStrategy(true);
+            onOpenStrategy();
+          }}
           className="p-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 text-white shadow-lg shadow-emerald-600/20 flex items-center justify-between cursor-pointer hover:opacity-95 transition-all transform active:scale-[0.99] border border-emerald-400/30"
         >
           <div className="flex items-center space-x-3">
