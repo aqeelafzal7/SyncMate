@@ -10,6 +10,8 @@ import {
   deleteTaskFromFirestore,
   subscribeUserProjects,
   addProjectToFirestore,
+  updateProjectInFirestore,
+  deleteProjectFromFirestore,
   subscribeUserWardrobe,
   subscribeStyleLogs,
   subscribeMyLookReports
@@ -296,6 +298,16 @@ export default function App() {
     await addProjectToFirestore(projectData);
   };
 
+  const handleUpdateProject = async (id: string, updatedData: Partial<Project>) => {
+    if (!userProfile) return;
+    await updateProjectInFirestore(id, userProfile.uid, updatedData);
+  };
+
+  const handleDeleteProject = async (id: string) => {
+    if (!userProfile) return;
+    await deleteProjectFromFirestore(id, userProfile.uid);
+  };
+
   // Loading Screen
   if (authLoading) {
     return (
@@ -441,6 +453,8 @@ export default function App() {
             <ProjectsView
               projects={projects}
               onAddProject={handleAddProject}
+              onUpdateProject={handleUpdateProject}
+              onDeleteProject={handleDeleteProject}
               onTaskCreated={handleSaveTask}
               userId={userProfile.uid}
               userProfile={userProfile}

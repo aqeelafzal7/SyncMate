@@ -209,6 +209,36 @@ export async function addProjectToFirestore(project: Omit<Project, 'id'>): Promi
   }
 }
 
+export async function updateProjectInFirestore(id: string, userId: string, updates: Partial<Project>): Promise<void> {
+  try {
+    const docRef = doc(db, 'projects', id);
+    await updateDoc(docRef, updates);
+  } catch (err) {
+    console.warn('updateProjectInFirestore fallback:', err);
+    const local = localStorage.getItem(`syncmate_projects_${userId}`);
+    if (local) {
+      let existing: Project[] = JSON.parse(local);
+      existing = existing.map(p => p.id === id ? { ...p, ...updates } : p);
+      localStorage.setItem(`syncmate_projects_${userId}`, JSON.stringify(existing));
+    }
+  }
+}
+
+export async function deleteProjectFromFirestore(id: string, userId: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'projects', id);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn('deleteProjectFromFirestore fallback:', err);
+    const local = localStorage.getItem(`syncmate_projects_${userId}`);
+    if (local) {
+      let existing: Project[] = JSON.parse(local);
+      existing = existing.filter(p => p.id !== id);
+      localStorage.setItem(`syncmate_projects_${userId}`, JSON.stringify(existing));
+    }
+  }
+}
+
 // Wardrobe Storage & Firestore Operations
 export async function uploadWardrobePhoto(userId: string, file: File | Blob | string): Promise<string> {
   const url = await uploadToImgBB(file);

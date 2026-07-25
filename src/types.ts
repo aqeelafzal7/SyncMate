@@ -125,8 +125,11 @@ export interface Project {
   title: string;
   description: string;
   goals: string[];
-  status: 'active' | 'completed' | 'on_hold';
+  status: 'active' | 'completed' | 'on_hold' | 'paused';
   pacingStrategy?: 'balanced' | 'steady' | 'intensive';
+  platform?: string;
+  timeCommitment?: string;
+  totalDuration?: string;
   createdAt: string;
 }
 

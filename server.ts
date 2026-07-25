@@ -476,8 +476,17 @@ Rules:
       if (mode === 'decompose_project') {
         const { project, existingTasks, prayerTimings } = context || {};
         const pacing = project?.pacingStrategy || 'balanced';
+        const platform = project?.platform || 'N/A';
+        const timeCommitment = project?.timeCommitment || 'N/A';
+        const totalDuration = project?.totalDuration || 'N/A';
+
         const decomposeSystemInstruction = `You are SyncMate, an elite AI scheduling assistant.
-Your job is to break down the long-term project "${project?.title || 'Project'}" (Description: "${project?.description || ''}", Goals: ${(project?.goals || []).join(', ')}) into 3 to 5 structured daily modules/milestones.
+Your job is to break down the course/project "${project?.title || 'Project'}" (Platform: "${platform}", Description: "${project?.description || ''}", Goals: ${(project?.goals || []).join(', ')}, Time Available: "${timeCommitment}", Total Duration Needed: "${totalDuration}") into 3 to 5 structured daily modules/milestones.
+
+TIME COMMITMENT & DURATION RULES:
+1. Calculate milestone dates and duration slots strictly respecting the user's specified time commitment ("${timeCommitment}") and total duration ("${totalDuration}").
+   - For example, if the user specified "30 mins/day", generate shorter 30-minute focus slots.
+   - If user specified "1 hour/day" or "3 hrs/week", adapt individual task start and end times accordingly.
 
 MULTI-DAY PACING RULES (Pacing Strategy: ${pacing.toUpperCase()}):
 1. DO NOT assign all modules to today!
@@ -512,7 +521,7 @@ MULTI-DAY PACING RULES (Pacing Strategy: ${pacing.toUpperCase()}):
 
         const response = await ai.models.generateContent({
           model: 'gemini-3.6-flash',
-          contents: [{ role: 'user', parts: [{ text: `Decompose project "${project?.title}" with pacing strategy "${pacing}".` }] }],
+          contents: [{ role: 'user', parts: [{ text: `Decompose course "${project?.title}" on platform "${platform}" with time commitment "${timeCommitment}", total duration "${totalDuration}", and pacing strategy "${pacing}".` }] }],
           config: {
             systemInstruction: decomposeSystemInstruction,
             temperature: 0.5,
