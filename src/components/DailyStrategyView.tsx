@@ -22,6 +22,15 @@ interface StrategyData {
   dontList: string[];
 }
 
+const cleanStrategyText = (text: string) => {
+  if (typeof text !== 'string') return '';
+  return text
+    .replace(/:\s*still not\.?$/i, '.')
+    .replace(/\s*still not\.?$/i, '.')
+    .replace(/\b(null|undefined)\b/g, '')
+    .trim();
+};
+
 interface DailyStrategyViewProps {
   userProfile: UserProfile;
   weather: WeatherData | null;
@@ -91,8 +100,12 @@ export const DailyStrategyView: React.FC<DailyStrategyViewProps> = ({
           try {
             const parsed = JSON.parse(match[1] || match[0]);
             if (parsed.summary) finalSummary = parsed.summary;
-            if (Array.isArray(parsed.doList) && parsed.doList.length > 0) finalDoList = parsed.doList;
-            if (Array.isArray(parsed.dontList) && parsed.dontList.length > 0) finalDontList = parsed.dontList;
+            if (Array.isArray(parsed.doList) && parsed.doList.length > 0) {
+              finalDoList = parsed.doList.map(cleanStrategyText).filter(Boolean);
+            }
+            if (Array.isArray(parsed.dontList) && parsed.dontList.length > 0) {
+              finalDontList = parsed.dontList.map(cleanStrategyText).filter(Boolean);
+            }
           } catch {
             // keep smart defaults
           }
@@ -287,7 +300,7 @@ export const DailyStrategyView: React.FC<DailyStrategyViewProps> = ({
                     className="p-3.5 rounded-2xl bg-white dark:bg-slate-900/90 border border-emerald-200/80 dark:border-emerald-800/60 text-slate-800 dark:text-emerald-100 text-xs sm:text-sm font-medium flex items-start space-x-3 shadow-sm hover:shadow-md transition-all"
                   >
                     <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                    <span className="leading-relaxed">{item}</span>
+                    <span className="leading-relaxed">{cleanStrategyText(item)}</span>
                   </li>
                 ))}
               </ul>
@@ -328,7 +341,7 @@ export const DailyStrategyView: React.FC<DailyStrategyViewProps> = ({
                     className="p-3.5 rounded-2xl bg-white dark:bg-slate-900/90 border border-red-200/80 dark:border-red-800/60 text-slate-800 dark:text-red-100 text-xs sm:text-sm font-medium flex items-start space-x-3 shadow-sm hover:shadow-md transition-all"
                   >
                     <XCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                    <span className="leading-relaxed">{item}</span>
+                    <span className="leading-relaxed">{cleanStrategyText(item)}</span>
                   </li>
                 ))}
               </ul>

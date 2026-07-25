@@ -203,11 +203,26 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
         }),
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
-        throw new Error(data.message || data.error || 'API request failed');
+        const errorText = await res.text();
+        let parsedMsg = 'AI request failed.';
+        try {
+          if (errorText) {
+            const errJson = JSON.parse(errorText);
+            parsedMsg = errJson.message || errJson.error || parsedMsg;
+          }
+        } catch {
+          parsedMsg = `Server error (${res.status}). Please check your API key setup.`;
+        }
+        throw new Error(parsedMsg);
       }
+
+      const errorText = await res.text();
+      if (!errorText || !errorText.trim()) {
+        throw new Error('Received an empty response from AI engine. Please retry.');
+      }
+
+      const data = JSON.parse(errorText);
 
       const replyText = data.reply || 'I am ready to assist you.';
 
