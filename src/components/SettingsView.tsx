@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Settings, 
   Key, 
@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, ThemeMode, UserLocation } from '../types';
 import { saveUserProfile } from '../lib/firebase';
+import { encryptAndSaveApiKey, getDecryptedApiKey, removeSavedApiKey } from '../lib/cryptoStorage';
 
 interface SettingsViewProps {
   userProfile: UserProfile | null;
@@ -30,8 +31,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onOpenCitySearch,
   onUpdateProfile
 }) => {
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('syncmate_gemini_api_key') || '');
+  const [apiKey, setApiKey] = useState('');
   const [keySaved, setKeySaved] = useState(false);
+
+  useEffect(() => {
+    getDecryptedApiKey().then((k) => {
+      if (k) setApiKey(k);
+    });
+  }, []);
 
   const [name, setName] = useState(userProfile?.name || '');
   const [occupation, setOccupation] = useState(userProfile?.occupation || '');
@@ -40,12 +47,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [dob, setDob] = useState(userProfile?.dob || '');
   const [profileSaved, setProfileSaved] = useState(false);
 
-  const handleSaveApiKey = (e: React.FormEvent) => {
+  const handleSaveApiKey = async (e: React.FormEvent) => {
     e.preventDefault();
     if (apiKey.trim()) {
-      localStorage.setItem('syncmate_gemini_api_key', apiKey.trim());
+      await encryptAndSaveApiKey(apiKey.trim());
     } else {
-      localStorage.removeItem('syncmate_gemini_api_key');
+      removeSavedApiKey();
     }
     setKeySaved(true);
     setTimeout(() => setKeySaved(false), 3000);

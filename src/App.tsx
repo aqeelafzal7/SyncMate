@@ -18,6 +18,7 @@ import {
 } from './lib/firebase';
 import { UserProfile, UserLocation, ThemeMode, Task, Project, PrayerTimings, WeatherData, ActiveTab, WardrobeItem, StyleLog, MyLookReport } from './types';
 import { getUserCurrentCoordinates, fetchPrayerTimings, fetchWeatherData } from './lib/contextService';
+import { storageManager } from './lib/storageManager';
 
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
@@ -251,11 +252,17 @@ export default function App() {
   const handleSignOut = async () => {
     try {
       await signOut(auth);
-    } catch {
-      // Ignore
-    } finally {
+      // Remove all syncmate_ storage items using centralized storage manager
+      storageManager.clearAllAppKeys();
+      sessionStorage.clear();
+      
+      // Reset React state
       setUserProfile(null);
       setFirebaseUser(null);
+      
+      window.location.reload();
+    } catch (err) {
+      console.error('Sign-out error:', err);
     }
   };
 

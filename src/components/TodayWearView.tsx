@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getDecryptedApiKey } from '../lib/cryptoStorage';
 import { AddWardrobeItemModal } from './AddWardrobeItemModal';
 import { 
   Shirt, 
@@ -195,7 +196,7 @@ export const TodayWearView: React.FC<TodayWearViewProps> = ({
     let resultingOutfits: StylistOutfitOption[] = [];
 
     try {
-      const customApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
+      const customApiKey = (await getDecryptedApiKey()) || undefined;
       const res = await fetch('/api/wardrobe/stylist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -319,7 +320,7 @@ export const TodayWearView: React.FC<TodayWearViewProps> = ({
         .filter(Boolean) as WardrobeItem[];
 
       const clothingImageUrls = outfitItems.map((item) => item.imageUrl).filter(Boolean);
-      const customApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
+      const customApiKey = (await getDecryptedApiKey()) || undefined;
 
       const res = await fetch('/api/wardrobe/virtual-tryon', {
         method: 'POST',

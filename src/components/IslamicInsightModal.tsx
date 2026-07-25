@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, MoonStar, HeartHandshake } from 'lucide-react';
 import { getEmotionalIslamicInsight, QuranAyahData, HadithData } from '../lib/islamicApiService';
+import { getDecryptedApiKey } from '../lib/cryptoStorage';
 
 interface IslamicInsightModalProps {
   prayerName: string;
@@ -49,7 +50,7 @@ export const IslamicInsightModal: React.FC<IslamicInsightModalProps> = ({
     fetchingRef.current = true;
     setLoading(true);
     try {
-      const activeApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
+      const activeApiKey = (await getDecryptedApiKey()) || undefined;
       const currentMood = activeMood || localStorage.getItem('syncmate_current_mood') || 'neutral';
       setUserMood(currentMood);
 

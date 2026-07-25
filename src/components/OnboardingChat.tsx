@@ -12,6 +12,7 @@ import {
   Check
 } from 'lucide-react';
 import { UserProfile, ChatMessage, UserLocation } from '../types';
+import { getDecryptedApiKey } from '../lib/cryptoStorage';
 import { getUserCurrentCoordinates } from '../lib/contextService';
 
 // Helper to calculate age from DOB
@@ -193,7 +194,7 @@ First, **what is your full name**?`,
     setLoading(true);
 
     try {
-      const customApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
+      const customApiKey = (await getDecryptedApiKey()) || undefined;
       
       // Step State Machine calculation
       const { responseText, nextProfile, nextStep } = processStepAnswer(textToSend);
@@ -454,9 +455,9 @@ First, **what is your full name**?`,
               onChange={(e) => setInput(e.target.value)}
               placeholder={
                 currentStep === 0
-                  ? "Type your full name (e.g. Muhammad Aqeel)..."
+                  ? "Type your full name (e.g. Aqeel)..."
                   : currentStep === 1
-                  ? "Type your occupation/studies (e.g. student of bs biotechnology)..."
+                  ? "Type your occupation/studies"
                   : currentStep === 2
                   ? "Type your goals or 'nothing'..."
                   : "Type 'Muslim', 'Non-Muslim', or your religion..."

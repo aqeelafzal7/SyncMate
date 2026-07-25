@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { ChatMessage, UserProfile, Task, PrayerTimings, WeatherData } from '../types';
 import { speakResponse, stopSpeech } from '../lib/audioService';
+import { encryptAndSaveApiKey, getDecryptedApiKey, removeSavedApiKey } from '../lib/cryptoStorage';
 
 interface FloatingAssistantProps {
   isOpen: boolean;
@@ -74,31 +75,36 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
   const [rolloverLoading, setRolloverLoading] = useState(false);
 
   // Gemini API Key Management
-  const [customApiKey, setCustomApiKey] = useState<string>(
-    () => localStorage.getItem('syncmate_gemini_api_key') || ''
-  );
-  const [apiKeyInput, setApiKeyInput] = useState<string>(
-    () => localStorage.getItem('syncmate_gemini_api_key') || ''
-  );
+  const [customApiKey, setCustomApiKey] = useState<string>('');
+  const [apiKeyInput, setApiKeyInput] = useState<string>('');
   const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    getDecryptedApiKey().then((key) => {
+      if (key) {
+        setCustomApiKey(key);
+        setApiKeyInput(key);
+      }
+    });
+  }, []);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
 
-  const handleSaveApiKey = () => {
+  const handleSaveApiKey = async () => {
     const trimmed = apiKeyInput.trim();
     if (trimmed) {
-      localStorage.setItem('syncmate_gemini_api_key', trimmed);
+      await encryptAndSaveApiKey(trimmed);
       setCustomApiKey(trimmed);
     } else {
-      localStorage.removeItem('syncmate_gemini_api_key');
+      removeSavedApiKey();
       setCustomApiKey('');
     }
     setShowApiKeyModal(false);
   };
 
   const handleClearApiKey = () => {
-    localStorage.removeItem('syncmate_gemini_api_key');
+    removeSavedApiKey();
     setCustomApiKey('');
     setApiKeyInput('');
     setShowApiKeyModal(false);
@@ -185,7 +191,7 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
     setInput('');
 
     try {
-      const activeApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
+      const activeApiKey = customApiKey || (await getDecryptedApiKey()) || undefined;
       let replyText = '';
 
       try {

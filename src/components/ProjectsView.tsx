@@ -4,6 +4,7 @@ import {
   Trophy, X, PauseCircle, PlayCircle, Globe, Clock, Calendar
 } from 'lucide-react';
 import { Project, Task, UserProfile, PrayerTimings } from '../types';
+import { getDecryptedApiKey } from '../lib/cryptoStorage';
 
 interface ProjectsViewProps {
   projects: Project[];
@@ -391,7 +392,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
     setDecomposedMessage(null);
 
     try {
-      const activeApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
+      const activeApiKey = (await getDecryptedApiKey()) || undefined;
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getDecryptedApiKey } from '../lib/cryptoStorage';
 import { 
   Sparkles, 
   Camera, 
@@ -154,7 +155,7 @@ export const MyLookView: React.FC<MyLookViewProps> = ({
         publicPhotoUrl = imgbbUrl;
       }
 
-      const customApiKey = localStorage.getItem('syncmate_gemini_api_key');
+      const customApiKey = await getDecryptedApiKey();
       const apiKey = customApiKey || 'AIzaSyDSaP14gCiA6N9ZwTKYLchhh4Frwdr6mz0'; // fallback key
 
       // Extract raw base64 data and mime type
@@ -249,7 +250,7 @@ Return ONLY a JSON object with these exact keys:
 
     setIsGeneratingVisual(true);
     try {
-      const customApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
+      const customApiKey = (await getDecryptedApiKey()) || undefined;
       const res = await fetch('/api/my-look/generate-visual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -288,7 +289,7 @@ Return ONLY a JSON object with these exact keys:
 
         setComparingProgress(true);
         try {
-          const customApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
+          const customApiKey = (await getDecryptedApiKey()) || undefined;
           const res = await fetch('/api/my-look/compare', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

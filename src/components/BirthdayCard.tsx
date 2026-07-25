@@ -3,6 +3,7 @@ import { Sparkles, Share2, Download, Cake, Award, PartyPopper } from 'lucide-rea
 import { toPng } from 'html-to-image';
 import confetti from 'canvas-confetti';
 import { UserProfile, Task } from '../types';
+import { getDecryptedApiKey } from '../lib/cryptoStorage';
 
 interface BirthdayCardProps {
   userProfile: UserProfile;
@@ -55,7 +56,7 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
       const fallbackWish = `May your cellular pathways align with exponential growth, boundless energy, and continuous breakthrough achievements. Happy Birthday Dear ${userProfile.name}, wish you all the best and continued success! — From your Autonomous Assistant, SyncMate ⚡`;
 
       try {
-        const customApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
+        const customApiKey = (await getDecryptedApiKey()) || undefined;
         const res = await fetch('/api/birthday-wish', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

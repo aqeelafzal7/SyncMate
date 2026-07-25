@@ -13,6 +13,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { UserProfile, WeatherData, Task } from '../types';
+import { getDecryptedApiKey } from '../lib/cryptoStorage';
 
 interface StrategyData {
   date: string;
@@ -53,7 +54,7 @@ export const DailyStrategyView: React.FC<DailyStrategyViewProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const customApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
+      const customApiKey = (await getDecryptedApiKey()) || undefined;
 
       const res = await fetch('/api/chat', {
         method: 'POST',

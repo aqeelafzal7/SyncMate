@@ -1,3 +1,5 @@
+import { getDecryptedApiKey } from './cryptoStorage';
+
 export interface QuranAyahData {
   arabic: string;
   english: string;
@@ -249,7 +251,7 @@ export async function getEmotionalIslamicInsight(
 ): Promise<EmotionalInsightResult> {
   const activeMood = currentMood || localStorage.getItem('syncmate_current_mood') || 'Neutral';
   const recentlyShown = getRecentlyShownInsights();
-  const activeApiKey = customApiKey || localStorage.getItem('syncmate_gemini_api_key') || '';
+  const activeApiKey = customApiKey || (await getDecryptedApiKey()) || '';
 
   let replyText = '';
 
