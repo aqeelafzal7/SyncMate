@@ -18,18 +18,15 @@ import {
 import { HabitStreak, UserProfile } from '../types';
 import { playCompletionChime } from '../lib/audioService';
 import { incrementHabitStreak } from '../lib/habitService';
+import { 
+  subscribeUserHabits, 
+  addHabitToFirestore, 
+  updateHabitInFirestore 
+} from '../lib/firebase';
 
 interface HabitsViewProps {
   userProfile: UserProfile | null;
 }
-
-const DEFAULT_HABITS: HabitStreak[] = [
-  { name: '🌅 Fajr & Morning Reflection', count: 12, lastCompletedDate: new Date().toISOString().split('T')[0] },
-  { name: '💧 2.5L Water Hydration', count: 8, lastCompletedDate: new Date().toISOString().split('T')[0] },
-  { name: '🧘 20-Min Deep Work Focus Block', count: 15, lastCompletedDate: new Date().toISOString().split('T')[0] },
-  { name: '🏋️ Core & Bodyweight Workout', count: 5, lastCompletedDate: '' },
-  { name: '📖 Evening Reading / Bait Bazi Review', count: 9, lastCompletedDate: new Date().toISOString().split('T')[0] }
-];
 
 export const HabitsView: React.FC<HabitsViewProps> = ({ userProfile }) => {
   // Timer State
@@ -45,12 +42,18 @@ export const HabitsView: React.FC<HabitsViewProps> = ({ userProfile }) => {
   const [customHabitName, setCustomHabitName] = useState<string>('');
   const [customHabitMins, setCustomHabitMins] = useState<string>('');
 
-  // Daily Habits List State
-  const [habits, setHabits] = useState<HabitStreak[]>(() => {
-    const local = localStorage.getItem(`syncmate_habits_${userProfile?.uid || 'guest'}`);
-    return local ? JSON.parse(local) : DEFAULT_HABITS;
-  });
+  // Daily Habits List State - Pure Firestore State
+  const [habits, setHabits] = useState<any[]>([]);
   const [newHabitName, setNewHabitName] = useState<string>('');
+
+  // Subscribe to real-time Firestore habits
+  useEffect(() => {
+    if (!userProfile?.uid) return;
+    const unsubscribe = subscribeUserHabits(userProfile.uid, (firestoreHabits) => {
+      setHabits(firestoreHabits || []);
+    });
+    return () => unsubscribe();
+  }, [userProfile?.uid]);
 
   // Timer Interval Effect
   useEffect(() => {
@@ -74,7 +77,7 @@ export const HabitsView: React.FC<HabitsViewProps> = ({ userProfile }) => {
     if (label) setActiveHabitLabel(label);
   };
 
-  const handleFinishHabit = (habitName: string) => {
+  const handleFinishHabit = async (habitName: string) => {
     setIsRunning(false);
     setIsFinished(true);
     playCompletionChime();
@@ -83,14 +86,22 @@ export const HabitsView: React.FC<HabitsViewProps> = ({ userProfile }) => {
     const res = incrementHabitStreak(habitName);
     setStreakResult({ count: res.count, isExtendedToday: res.isExtendedToday });
 
-    // Also update habits list state if matching or add it
+    // Update or add habit in Firestore
     const today = new Date().toISOString().split('T')[0];
-    const existingIndex = habits.findIndex(h => h.name.toLowerCase().includes(habitName.toLowerCase()) || habitName.toLowerCase().includes(h.name.toLowerCase()));
-    if (existingIndex !== -1) {
-      const updated = [...habits];
-      updated[existingIndex].count = res.count;
-      updated[existingIndex].lastCompletedDate = today;
-      saveHabits(updated);
+    if (userProfile?.uid) {
+      const existing = habits.find(h => (h.name || '').toLowerCase().includes(habitName.toLowerCase()) || habitName.toLowerCase().includes((h.name || '').toLowerCase()));
+      if (existing?.id) {
+        await updateHabitInFirestore(existing.id, userProfile.uid, {
+          count: res.count,
+          lastCompletedDate: today
+        });
+      } else {
+        await addHabitToFirestore(userProfile.uid, {
+          name: habitName,
+          count: res.count,
+          lastCompletedDate: today
+        });
+      }
     }
   };
 
@@ -108,33 +119,29 @@ export const HabitsView: React.FC<HabitsViewProps> = ({ userProfile }) => {
     setIsRunning(true);
   };
 
-  // Habits list helpers
-  const saveHabits = (updated: HabitStreak[]) => {
-    setHabits(updated);
-    localStorage.setItem(`syncmate_habits_${userProfile?.uid || 'guest'}`, JSON.stringify(updated));
-  };
-
-  const handleToggleHabit = (index: number) => {
+  const handleToggleHabit = async (habit: any) => {
+    if (!userProfile?.uid || !habit?.id) return;
     const today = new Date().toISOString().split('T')[0];
-    const updated = [...habits];
-    const current = updated[index];
+    const isCompletedToday = habit.lastCompletedDate === today;
 
-    if (current.lastCompletedDate === today) {
-      current.count = Math.max(0, current.count - 1);
-      current.lastCompletedDate = '';
-    } else {
-      current.count += 1;
-      current.lastCompletedDate = today;
-    }
+    const newCount = isCompletedToday ? Math.max(0, (habit.count || 0) - 1) : (habit.count || 0) + 1;
+    const newDate = isCompletedToday ? '' : today;
 
-    saveHabits(updated);
+    await updateHabitInFirestore(habit.id, userProfile.uid, {
+      count: newCount,
+      lastCompletedDate: newDate
+    });
   };
 
-  const handleAddHabit = (e: React.FormEvent) => {
+  const handleAddHabit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newHabitName.trim()) return;
-    const updated = [...habits, { name: newHabitName.trim(), count: 1, lastCompletedDate: new Date().toISOString().split('T')[0] }];
-    saveHabits(updated);
+    if (!newHabitName.trim() || !userProfile?.uid) return;
+
+    await addHabitToFirestore(userProfile.uid, {
+      name: newHabitName.trim(),
+      count: 0,
+      lastCompletedDate: ''
+    });
     setNewHabitName('');
   };
 
@@ -471,48 +478,57 @@ export const HabitsView: React.FC<HabitsViewProps> = ({ userProfile }) => {
           </form>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {habits.map((habit, idx) => {
-            const isDoneToday = habit.lastCompletedDate === todayStr;
+        {habits.length === 0 ? (
+          <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl">
+            <Flame className="w-8 h-8 text-amber-500 mx-auto mb-2 opacity-60" />
+            <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+              No active habits yet. Add a habit above to build your daily streak.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {habits.map((habit, idx) => {
+              const isDoneToday = habit.lastCompletedDate === todayStr;
 
-            return (
-              <div
-                key={idx}
-                className={`p-4 rounded-2xl border transition-all flex items-center justify-between ${
-                  isDoneToday
-                    ? 'bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800'
-                    : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700/80'
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <button
-                    onClick={() => handleToggleHabit(idx)}
-                    className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
-                      isDoneToday
-                        ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
-                        : 'bg-white dark:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-600'
-                    }`}
-                  >
-                    <CheckCircle2 className="w-5 h-5" />
-                  </button>
-                  <div>
-                    <h4 className={`text-xs sm:text-sm font-bold ${isDoneToday ? 'text-emerald-900 dark:text-emerald-200 line-through' : 'text-slate-900 dark:text-white'}`}>
-                      {habit.name}
-                    </h4>
-                    <p className="text-[10px] text-slate-400 mt-0.5">
-                      {isDoneToday ? 'Completed today! Streak increased.' : 'Pending completion today.'}
-                    </p>
+              return (
+                <div
+                  key={habit.id || idx}
+                  className={`p-4 rounded-2xl border transition-all flex items-center justify-between ${
+                    isDoneToday
+                      ? 'bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800'
+                      : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700/80'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={() => handleToggleHabit(habit)}
+                      className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
+                        isDoneToday
+                          ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
+                          : 'bg-white dark:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-600'
+                      }`}
+                    >
+                      <CheckCircle2 className="w-5 h-5" />
+                    </button>
+                    <div>
+                      <h4 className={`text-xs sm:text-sm font-bold ${isDoneToday ? 'text-emerald-900 dark:text-emerald-200 line-through' : 'text-slate-900 dark:text-white'}`}>
+                        {habit.name}
+                      </h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {isDoneToday ? 'Completed today! Streak increased.' : 'Pending completion today.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-1.5 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 font-black text-xs shrink-0">
+                    <Flame className="w-3.5 h-3.5 fill-current" />
+                    <span>{habit.count || 0}d</span>
                   </div>
                 </div>
-
-                <div className="flex items-center space-x-1.5 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 font-black text-xs shrink-0">
-                  <Flame className="w-3.5 h-3.5 fill-current" />
-                  <span>{habit.count}d</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
     </div>

@@ -103,7 +103,10 @@ export default function App() {
       if (user) {
         const profile = await getUserProfile(user.uid);
         if (profile) {
-          setUserProfile(profile);
+          const activeMood = profile.activeMood || 'neutral';
+          const profWithMood = { ...profile, activeMood };
+          setUserProfile(profWithMood);
+          localStorage.setItem('syncmate_current_mood', activeMood);
           setShowOnboarding(!profile.onboarded);
         } else {
           // New account, create initial profile draft
@@ -115,11 +118,13 @@ export default function App() {
             goals: '',
             religion: 'None',
             onboarded: false,
+            activeMood: 'neutral',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           };
           await saveUserProfile(newProf);
           setUserProfile(newProf);
+          localStorage.setItem('syncmate_current_mood', 'neutral');
           setShowOnboarding(true);
         }
       } else {
@@ -208,14 +213,29 @@ export default function App() {
       religion: 'Muslim',
       location: initialLoc,
       onboarded: false, // Show onboarding chat first!
+      activeMood: 'neutral',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
     await saveUserProfile(guestProf);
     setUserProfile(guestProf);
+    localStorage.setItem('syncmate_current_mood', 'neutral');
     setShowOnboarding(true);
     setAuthLoading(false);
+  };
+
+  const handleUpdateActiveMood = async (newMood: string) => {
+    if (!userProfile) return;
+    const moodNormalized = newMood.toLowerCase().trim() || 'neutral';
+    const updatedProf: UserProfile = { ...userProfile, activeMood: moodNormalized };
+    setUserProfile(updatedProf);
+    localStorage.setItem('syncmate_current_mood', moodNormalized);
+    await saveUserProfile(updatedProf).catch(console.warn);
+  };
+
+  const handleResetActiveMood = async () => {
+    await handleUpdateActiveMood('neutral');
   };
 
   const handleCompleteOnboarding = async (finalProfile: UserProfile) => {
@@ -365,6 +385,8 @@ export default function App() {
               tasks={tasks}
               prayerTimings={prayerTimings}
               weather={weather}
+              activeMood={userProfile.activeMood || 'neutral'}
+              onResetMood={handleResetActiveMood}
               onAddTaskClick={(slot) => {
                 setTaskModalDefaultSlot(slot);
                 setIsTaskModalOpen(true);
@@ -456,6 +478,7 @@ export default function App() {
           weather={weather}
           onTaskCreated={handleSaveTask}
           onTasksRolledOver={handleTasksRolledOver}
+          onUpdateActiveMood={handleUpdateActiveMood}
         />
       )}
 

@@ -15,6 +15,7 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
   const [sharedToast, setSharedToast] = useState<boolean>(false);
   const [downloading, setDownloading] = useState<boolean>(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  const fetchingRef = useRef<boolean>(false);
 
   // Calculate year in review stat
   const completedTasksCount = tasks.filter(t => t.status === 'completed').length;
@@ -48,6 +49,8 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
 
     // Fetch AI Birthday wish with cache & fallback
     const fetchWish = async () => {
+      if (fetchingRef.current) return;
+      fetchingRef.current = true;
       setLoading(true);
       const fallbackWish = `May your cellular pathways align with exponential growth, boundless energy, and continuous breakthrough achievements. Happy Birthday Dear ${userProfile.name}, wish you all the best and continued success! — From your Autonomous Assistant, SyncMate ⚡`;
 
@@ -70,6 +73,7 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
             localStorage.setItem(cacheKey, data.wish);
             setWish(data.wish);
             setLoading(false);
+            fetchingRef.current = false;
             return;
           }
         }
@@ -85,6 +89,7 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
       }
       setWish(fallbackWish);
       setLoading(false);
+      fetchingRef.current = false;
     };
 
     fetchWish();

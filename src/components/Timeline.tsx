@@ -36,6 +36,8 @@ interface TimelineProps {
   tasks: Task[];
   prayerTimings: PrayerTimings | null;
   weather: WeatherData | null;
+  activeMood?: string;
+  onResetMood?: () => void;
   onAddTaskClick: (hourSlot?: string) => void;
   onToggleTaskStatus: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
@@ -48,6 +50,8 @@ export const Timeline: React.FC<TimelineProps> = ({
   tasks,
   prayerTimings,
   weather,
+  activeMood,
+  onResetMood,
   onAddTaskClick,
   onToggleTaskStatus,
   onDeleteTask,
@@ -729,6 +733,8 @@ export const Timeline: React.FC<TimelineProps> = ({
       <IslamicInsightModal
         prayerName={islamicModal.prayerName}
         isOpen={islamicModal.isOpen}
+        activeMood={activeMood || userProfile.activeMood}
+        onResetMood={onResetMood}
         onClose={() => setIslamicModal({ isOpen: false, prayerName: '' })}
         isBirthday={isBirthdayMode}
       />

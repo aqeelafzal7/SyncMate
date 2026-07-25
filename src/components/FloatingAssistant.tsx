@@ -28,6 +28,18 @@ interface FloatingAssistantProps {
   weather: WeatherData | null;
   onTaskCreated: (taskData: Omit<Task, 'id'>) => void;
   onTasksRolledOver?: (reorganizedTasks: any[]) => void;
+  onUpdateActiveMood?: (mood: string) => void;
+}
+
+// Lightweight sentiment fallback evaluator for incoming message tone
+function evaluateSentimentFromText(text: string): string | null {
+  const lower = text.toLowerCase();
+  if (/\b(anxious|worried|nervous|fear|panic|dread|scared|apprehensive)\b/.test(lower)) return 'anxious';
+  if (/\b(stressed|overwhelmed|exhausted|burnout|pressure|too much|drowning)\b/.test(lower)) return 'stressed';
+  if (/\b(grateful|thankful|blessed|alhamdulillah|appreciate|gratitude)\b/.test(lower)) return 'grateful';
+  if (/\b(happy|joy|joyful|excited|thrilled|great day|awesome|wonderful|delighted)\b/.test(lower)) return 'joyful';
+  if (/\b(sad|depressed|lonely|down|grief|heartbroken|crying|unhappy|miserable)\b/.test(lower)) return 'sad';
+  return null;
 }
 
 export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({
@@ -39,6 +51,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({
   weather,
   onTaskCreated,
   onTasksRolledOver,
+  onUpdateActiveMood,
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -54,6 +67,8 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const isFetchingRef = useRef<boolean>(false);
   const [isListening, setIsListening] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [rolloverLoading, setRolloverLoading] = useState(false);
@@ -152,7 +167,11 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
 
   const handleSend = async (overrideText?: string) => {
     const textToSend = (overrideText || input).trim();
-    if (!textToSend || loading) return;
+    if (!textToSend || loading || isGenerating || isFetchingRef.current) return;
+
+    isFetchingRef.current = true;
+    setIsGenerating(true);
+    setLoading(true);
 
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
@@ -164,7 +183,6 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setInput('');
-    setLoading(true);
 
     try {
       const activeApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
@@ -259,15 +277,28 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
       }
 
       // Parse potential json_mood block for emotional sentiment tracking
+      let detectedMood: string | null = null;
       const moodMatch = replyText.match(/```json_mood\s*([\s\S]*?)\s*```/);
       if (moodMatch && moodMatch[1]) {
         try {
           const moodObj = JSON.parse(moodMatch[1]);
           if (moodObj.detectedMood) {
-            localStorage.setItem('syncmate_current_mood', moodObj.detectedMood);
+            detectedMood = String(moodObj.detectedMood).toLowerCase().trim();
           }
         } catch (e) {
           console.warn('Failed to parse json_mood:', e);
+        }
+      }
+
+      // Lightweight background sentiment evaluation fallback on incoming message tone
+      if (!detectedMood) {
+        detectedMood = evaluateSentimentFromText(textToSend);
+      }
+
+      if (detectedMood) {
+        localStorage.setItem('syncmate_current_mood', detectedMood);
+        if (onUpdateActiveMood) {
+          onUpdateActiveMood(detectedMood);
         }
       }
 
@@ -307,6 +338,8 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
       }
     } finally {
       setLoading(false);
+      setIsGenerating(false);
+      isFetchingRef.current = false;
     }
   };
 
@@ -607,14 +640,15 @@ Once you confirm, I will place it in your schedule with a proactive prep tip!`,
           <input
             type="text"
             value={input}
+            disabled={loading || isGenerating}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={isListening ? 'Listening to your voice...' : 'Type or speak to schedule tasks...'}
-            className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-2 px-3 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+            placeholder={isListening ? 'Listening to your voice...' : isGenerating ? 'SyncMate is thinking...' : 'Type or speak to schedule tasks...'}
+            className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-2 px-3 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 disabled:opacity-60"
           />
           
           <button
             type="submit"
-            disabled={loading || !input.trim()}
+            disabled={loading || isGenerating || !input.trim()}
             className="p-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-xl shadow-md transition-all shrink-0"
           >
             <Send className="w-3.5 h-3.5" />

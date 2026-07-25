@@ -24,7 +24,6 @@ import {
   deleteDoc,
   serverTimestamp
 } from 'firebase/firestore';
-import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { UserProfile, Task, Project, WardrobeItem, StyleLog, MyLookReport } from '../types';
 
 export const firebaseConfig = {
@@ -40,8 +39,36 @@ export const firebaseConfig = {
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
+
+// ImgBB Upload Utility
+export const uploadToImgBB = async (file: File | Blob | string): Promise<string | null> => {
+  const apiKey = 'ec3e917febb898867d674326f22118e5';
+  const formData = new FormData();
+  
+  if (typeof file === 'string') {
+    const cleanBase64 = file.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
+    formData.append('image', cleanBase64);
+  } else {
+    formData.append('image', file);
+  }
+
+  try {
+    const response = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
+      method: 'POST',
+      body: formData
+    });
+    const data = await response.json();
+    if (data.success && data.data?.url) {
+      return data.data.url;
+    } else {
+      throw new Error(data?.error?.message || "ImgBB upload failed");
+    }
+  } catch (error) {
+    console.error("Upload error:", error);
+    return null;
+  }
+};
 
 // User Profile Firestore Operations
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
@@ -182,111 +209,42 @@ export async function addProjectToFirestore(project: Omit<Project, 'id'>): Promi
   }
 }
 
-// Default initial wardrobe items seed for rich initial experience
-export const SEED_WARDROBE_ITEMS: Omit<WardrobeItem, 'id' | 'userId' | 'createdAt'>[] = [
-  {
-    name: "Executive White Oxford Shirt",
-    category: "Tops",
-    imageUrl: "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=600&auto=format&fit=crop&q=80",
-    status: "clean",
-    tags: { color: "White", formalityLevel: "Formal", season: "All Season", description: "Crisp cotton Oxford shirt for high-impact meetings and executive presence." }
-  },
-  {
-    name: "Navy Tailored Blazer",
-    category: "Tops",
-    imageUrl: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600&auto=format&fit=crop&q=80",
-    status: "clean",
-    tags: { color: "Navy Blue", formalityLevel: "Formal", season: "All Season", description: "Modern fit navy blazer with structured shoulders." }
-  },
-  {
-    name: "Dark Charcoal Trousers",
-    category: "Bottoms",
-    imageUrl: "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=600&auto=format&fit=crop&q=80",
-    status: "clean",
-    tags: { color: "Charcoal", formalityLevel: "Formal", season: "All Season", description: "Tapered dark charcoal wool-blend dress pants." }
-  },
-  {
-    name: "Slim Fit Indigo Chinos",
-    category: "Bottoms",
-    imageUrl: "https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=600&auto=format&fit=crop&q=80",
-    status: "clean",
-    tags: { color: "Indigo", formalityLevel: "Smart Casual", season: "All Season", description: "Stretch cotton chinos for comfort and elegance." }
-  },
-  {
-    name: "White Cotton Shalwar Kameez",
-    category: "Traditional",
-    imageUrl: "https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=600&auto=format&fit=crop&q=80",
-    status: "clean",
-    tags: { color: "Pure White", formalityLevel: "Traditional", season: "All Season", description: "Classic white tailored Shalwar Kameez for Jummah & formal gatherings." }
-  },
-  {
-    name: "Dark Brown Leather Loafers",
-    category: "Footwear",
-    imageUrl: "https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?w=600&auto=format&fit=crop&q=80",
-    status: "clean",
-    tags: { color: "Dark Brown", formalityLevel: "Formal", season: "All Season", description: "Handcrafted Italian leather penny loafers." }
-  },
-  {
-    name: "Minimalist Chronograph Watch",
-    category: "Watches",
-    imageUrl: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=600&auto=format&fit=crop&q=80",
-    status: "clean",
-    tags: { color: "Silver/Black", formalityLevel: "Smart Casual", season: "All Season", description: "Stainless steel executive watch with black leather strap." }
-  },
-  {
-    name: "Classic Aviator Sunglasses",
-    category: "Glasses",
-    imageUrl: "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=600&auto=format&fit=crop&q=80",
-    status: "clean",
-    tags: { color: "Gold/Dark", formalityLevel: "Casual", season: "Summer", description: "UV-protected metallic frame aviator sunglasses." }
-  },
-  {
-    name: "Custom Silver Signet Ring",
-    category: "Custom",
-    imageUrl: "https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=600&auto=format&fit=crop&q=80",
-    status: "clean",
-    tags: { color: "Silver", formalityLevel: "Smart Casual", season: "All Season", description: "Engraved sterling silver signet accessory." }
-  }
-];
+// Wardrobe Storage & Firestore Operations
+export async function uploadWardrobePhoto(userId: string, file: File | Blob | string): Promise<string> {
+  const url = await uploadToImgBB(file);
+  if (url) return url;
 
-// Wardrobe Firestore Operations
+  if (typeof file === 'string') return file;
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.readAsDataURL(file as Blob);
+  });
+}
+
 export function subscribeUserWardrobe(uid: string, callback: (items: WardrobeItem[]) => void) {
   try {
+    if (!auth.currentUser || uid.startsWith('guest')) {
+      const local = localStorage.getItem(`syncmate_wardrobe_${uid}`);
+      callback(local ? JSON.parse(local) : []);
+      return () => {};
+    }
+
     const q = query(collection(db, 'wardrobe'), where('userId', '==', uid));
     return onSnapshot(q, (snapshot) => {
       const items: WardrobeItem[] = [];
       snapshot.forEach((docSnap) => {
         items.push({ id: docSnap.id, ...docSnap.data() } as WardrobeItem);
       });
-
-      // If empty in Firestore, seed initial wardrobe automatically
-      if (items.length === 0) {
-        SEED_WARDROBE_ITEMS.forEach((seed) => {
-          addWardrobeItemToFirestore({ ...seed, userId: uid });
-        });
-      }
-
-      callback(items.length > 0 ? items : SEED_WARDROBE_ITEMS.map((s, idx) => ({ ...s, id: `seed_${idx}`, userId: uid, createdAt: new Date().toISOString() })));
+      callback(items);
     }, (err) => {
       console.warn('Wardrobe snapshot fallback to local:', err);
       const local = localStorage.getItem(`syncmate_wardrobe_${uid}`);
-      if (local) {
-        callback(JSON.parse(local));
-      } else {
-        const seeded = SEED_WARDROBE_ITEMS.map((s, idx) => ({ ...s, id: `seed_${idx}`, userId: uid, createdAt: new Date().toISOString() }));
-        localStorage.setItem(`syncmate_wardrobe_${uid}`, JSON.stringify(seeded));
-        callback(seeded);
-      }
+      callback(local ? JSON.parse(local) : []);
     });
   } catch (err) {
     const local = localStorage.getItem(`syncmate_wardrobe_${uid}`);
-    if (local) {
-      callback(JSON.parse(local));
-    } else {
-      const seeded = SEED_WARDROBE_ITEMS.map((s, idx) => ({ ...s, id: `seed_${idx}`, userId: uid, createdAt: new Date().toISOString() }));
-      localStorage.setItem(`syncmate_wardrobe_${uid}`, JSON.stringify(seeded));
-      callback(seeded);
-    }
+    callback(local ? JSON.parse(local) : []);
     return () => {};
   }
 }
@@ -370,6 +328,12 @@ export async function resetUserLaundryInFirestore(userId: string, itemIds: strin
 // Style Logs Firestore Operations
 export function subscribeStyleLogs(uid: string, callback: (logs: StyleLog[]) => void) {
   try {
+    if (!auth.currentUser || uid.startsWith('guest')) {
+      const local = localStorage.getItem(`syncmate_style_logs_${uid}`);
+      callback(local ? JSON.parse(local) : []);
+      return () => {};
+    }
+
     const q = query(collection(db, 'style_logs'), where('userId', '==', uid));
     return onSnapshot(q, (snapshot) => {
       const logs: StyleLog[] = [];
@@ -410,21 +374,25 @@ export async function saveStyleLogToFirestore(log: Omit<StyleLog, 'id' | 'create
 }
 
 // My Look Biometrics Firestore & Storage Operations
-export async function uploadMyLookPhoto(userId: string, base64Data: string): Promise<string> {
-  try {
-    const timestamp = Date.now();
-    const storageRef = ref(storage, `user_photos/${userId}/${timestamp}.jpg`);
-    await uploadString(storageRef, base64Data, 'data_url');
-    const url = await getDownloadURL(storageRef);
-    return url;
-  } catch (err) {
-    console.warn('Firebase Storage upload fallback to base64 string:', err);
-    return base64Data;
-  }
+export async function uploadMyLookPhoto(userId: string, image: File | Blob | string): Promise<string> {
+  const url = await uploadToImgBB(image);
+  if (url) return url;
+  if (typeof image === 'string') return image;
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.readAsDataURL(image as Blob);
+  });
 }
 
 export function subscribeMyLookReports(uid: string, callback: (reports: MyLookReport[]) => void) {
   try {
+    if (!auth.currentUser || uid.startsWith('guest')) {
+      const local = localStorage.getItem(`syncmate_my_look_reports_${uid}`);
+      callback(local ? JSON.parse(local) : []);
+      return () => {};
+    }
+
     const q = query(collection(db, 'my_look_reports'), where('userId', '==', uid));
     return onSnapshot(q, (snapshot) => {
       const reports: MyLookReport[] = [];
@@ -462,6 +430,72 @@ export async function addMyLookReportToFirestore(report: Omit<MyLookReport, 'id'
     existing.unshift(newReport);
     localStorage.setItem(`syncmate_my_look_reports_${report.userId}`, JSON.stringify(existing));
     return newId;
+  }
+}
+
+// Habits Firestore Operations
+export function subscribeUserHabits(uid: string, callback: (habits: any[]) => void) {
+  try {
+    if (!auth.currentUser || uid.startsWith('guest')) {
+      const local = localStorage.getItem(`syncmate_habits_${uid}`);
+      callback(local ? JSON.parse(local) : []);
+      return () => {};
+    }
+
+    const q = query(collection(db, 'habits'), where('userId', '==', uid));
+    return onSnapshot(q, (snapshot) => {
+      const habits: any[] = [];
+      snapshot.forEach((docSnap) => {
+        habits.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      callback(habits);
+    }, (err) => {
+      console.warn('Habits snapshot fallback:', err);
+      const local = localStorage.getItem(`syncmate_habits_${uid}`);
+      callback(local ? JSON.parse(local) : []);
+    });
+  } catch (err) {
+    const local = localStorage.getItem(`syncmate_habits_${uid}`);
+    callback(local ? JSON.parse(local) : []);
+    return () => {};
+  }
+}
+
+export async function addHabitToFirestore(userId: string, habit: { name: string; count: number; lastCompletedDate?: string }): Promise<string> {
+  try {
+    const colRef = collection(db, 'habits');
+    const docRef = await addDoc(colRef, {
+      ...habit,
+      userId,
+      createdAt: new Date().toISOString()
+    });
+    return docRef.id;
+  } catch (err) {
+    console.warn('addHabitToFirestore fallback:', err);
+    const local = localStorage.getItem(`syncmate_habits_${userId}`);
+    const existing: any[] = local ? JSON.parse(local) : [];
+    const newHabit = { ...habit, id: `habit_${Date.now()}`, userId };
+    existing.push(newHabit);
+    localStorage.setItem(`syncmate_habits_${userId}`, JSON.stringify(existing));
+    return newHabit.id;
+  }
+}
+
+export async function updateHabitInFirestore(id: string, userId: string, updates: any): Promise<void> {
+  try {
+    if (!id.startsWith('habit_local_')) {
+      const docRef = doc(db, 'habits', id);
+      await updateDoc(docRef, updates);
+    }
+  } catch (err) {
+    console.warn('updateHabitInFirestore fallback:', err);
+  } finally {
+    const local = localStorage.getItem(`syncmate_habits_${userId}`);
+    if (local) {
+      let existing: any[] = JSON.parse(local);
+      existing = existing.map(h => h.id === id ? { ...h, ...updates } : h);
+      localStorage.setItem(`syncmate_habits_${userId}`, JSON.stringify(existing));
+    }
   }
 }
 

@@ -1,4 +1,5 @@
 export type ThemeMode = 'light' | 'dark' | 'system';
+export type TaskStatus = 'todo' | 'in_progress' | 'completed' | 'rolled_over';
 
 export interface UserLocation {
   latitude: number;
@@ -19,6 +20,7 @@ export interface UserProfile {
   dob?: string; // YYYY-MM-DD
   location?: UserLocation;
   onboarded: boolean;
+  activeMood?: string;
   createdAt: string;
   updatedAt: string;
 }

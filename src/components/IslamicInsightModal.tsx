@@ -6,6 +6,8 @@ interface IslamicInsightModalProps {
   prayerName: string;
   isOpen: boolean;
   onClose: () => void;
+  activeMood?: string;
+  onResetMood?: () => void;
   isBirthday?: boolean;
 }
 
@@ -13,6 +15,8 @@ export const IslamicInsightModal: React.FC<IslamicInsightModalProps> = ({
   prayerName,
   isOpen,
   onClose,
+  activeMood,
+  onResetMood,
   isBirthday,
 }) => {
   const [step, setStep] = useState<'quran' | 'hadith'>('quran');
@@ -22,6 +26,7 @@ export const IslamicInsightModal: React.FC<IslamicInsightModalProps> = ({
   const [hadithData, setHadithData] = useState<HadithData | null>(null);
   const [contextHeading, setContextHeading] = useState<string>('');
   const [userMood, setUserMood] = useState<string>('Neutral');
+  const fetchingRef = React.useRef<boolean>(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -34,10 +39,12 @@ export const IslamicInsightModal: React.FC<IslamicInsightModalProps> = ({
   }, [isOpen]);
 
   const loadInsightData = async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
     setLoading(true);
     try {
       const activeApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
-      const currentMood = localStorage.getItem('syncmate_current_mood') || 'Neutral';
+      const currentMood = activeMood || localStorage.getItem('syncmate_current_mood') || 'neutral';
       setUserMood(currentMood);
 
       const result = await getEmotionalIslamicInsight(currentMood, activeApiKey, isBirthday);
@@ -50,6 +57,7 @@ export const IslamicInsightModal: React.FC<IslamicInsightModalProps> = ({
       console.error('Failed to load emotional Islamic insight:', err);
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
 
@@ -249,15 +257,18 @@ export const IslamicInsightModal: React.FC<IslamicInsightModalProps> = ({
               </div>
             )}
 
-            {/* Done Button */}
+            {/* Done / Read & Reflected Button */}
             <div className="pt-2 flex justify-end">
               <button
-                onClick={onClose}
+                onClick={() => {
+                  onResetMood?.();
+                  onClose();
+                }}
                 disabled={loading}
                 className="w-full sm:w-auto px-8 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm shadow-xl shadow-emerald-950/60 flex items-center justify-center space-x-2 transition-all disabled:opacity-50"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Done • Return to Timeline</span>
+                <span>Read & Reflected • Return to Timeline</span>
               </button>
             </div>
           </div>

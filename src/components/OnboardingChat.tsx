@@ -49,6 +49,8 @@ export const OnboardingChat: React.FC<OnboardingChatProps> = ({
     location: initialProfile?.location,
   });
 
+  const [isGenerating, setIsGenerating] = useState(false);
+  const isFetchingRef = useRef<boolean>(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -154,7 +156,11 @@ First, **what is your full name**?`,
 
   const handleSendMessage = async (customText?: string) => {
     const textToSend = (customText || input).trim();
-    if (!textToSend || loading) return;
+    if (!textToSend || loading || isGenerating || isFetchingRef.current) return;
+
+    isFetchingRef.current = true;
+    setIsGenerating(true);
+    setLoading(true);
 
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
@@ -246,6 +252,8 @@ First, **what is your full name**?`,
       setMessages([...newMessages, aiMsg]);
     } finally {
       setLoading(false);
+      setIsGenerating(false);
+      isFetchingRef.current = false;
     }
   };
 
