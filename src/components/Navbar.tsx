@@ -1,72 +1,63 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
-  Sparkles, 
   Sun, 
   Moon, 
   Monitor, 
-  LogOut, 
-  User as UserIcon, 
-  Compass, 
-  MapPin, 
-  CloudSun,
-  ShieldCheck,
-  Bot
+  Menu
 } from 'lucide-react';
-import { UserProfile, ThemeMode, WeatherData } from '../types';
+import { UserProfile, ThemeMode } from '../types';
 
 interface NavbarProps {
   userProfile: UserProfile | null;
   theme: ThemeMode;
   onThemeChange: (mode: ThemeMode) => void;
-  weather: WeatherData | null;
-  locationName?: string;
-  onOpenCitySearch?: () => void;
   onSignOut: () => void;
   onOpenOnboarding: () => void;
   onToggleAssistant: () => void;
   isAssistantOpen: boolean;
+  onToggleMobileSidebar?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  userProfile,
   theme,
   onThemeChange,
-  weather,
-  locationName,
-  onOpenCitySearch,
-  onSignOut,
-  onOpenOnboarding,
-  onToggleAssistant,
-  isAssistantOpen,
+  onToggleMobileSidebar,
 }) => {
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md transition-colors duration-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <header className="sticky top-0 z-40 w-full border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md transition-colors duration-200">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
         
-        {/* Left - Weather & Location badge */}
-        <div className="flex items-center space-x-3">
+        {/* Left Side: Mobile Hamburger Menu + Logo + Brand Name + Context Engine Indicator */}
+        <div className="flex items-center space-x-2.5 shrink-0">
           <button
-            onClick={onOpenCitySearch}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 transition-all border border-slate-200/80 dark:border-slate-700/80 group"
-            title="Search or change city location"
+            onClick={onToggleMobileSidebar}
+            className="md:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            title="Open Mobile Navigation Menu"
           >
-            <MapPin className="w-3.5 h-3.5 text-indigo-500" />
-            <span className="font-bold">{locationName || 'Set Location'}</span>
-            <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold ml-1 bg-indigo-50 dark:bg-indigo-950/80 px-1.5 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800">✏️ Edit</span>
+            <Menu className="w-5 h-5" />
           </button>
-          {weather && (
-            <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-xs font-medium text-amber-700 dark:text-amber-300 border border-amber-200/50 dark:border-amber-800/50">
-              <CloudSun className="w-4 h-4 text-amber-500" />
-              <span>{weather.temperature}°C, {weather.condition}</span>
+
+          <div className="flex items-center space-x-2">
+            <img 
+              src="https://i.ibb.co/PztwKQdM/Sync-Mate.png" 
+              alt="SyncMate Logo" 
+              className="w-8 h-8 object-contain rounded-lg shadow-sm" 
+            />
+            <span className="font-extrabold text-base sm:text-lg tracking-tight text-slate-900 dark:text-white">
+              Sync<span className="text-indigo-600 dark:text-indigo-400">Mate</span>
+            </span>
+            <div 
+              className="flex items-center space-x-1 pl-1 cursor-pointer" 
+              title="Context Engine Active"
+            >
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shadow-sm shadow-amber-400/50" />
             </div>
-          )}
+          </div>
         </div>
 
-        {/* Right Controls - Theme Switcher */}
-        <div className="flex items-center space-x-3">
-          
-          {/* Theme Switcher */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700">
+        {/* Right Side: Theme Controls */}
+        <div className="flex items-center space-x-2 sm:space-x-3">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700 shrink-0">
             <button
               onClick={() => onThemeChange('light')}
               title="Light Theme"
@@ -101,7 +92,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Monitor className="w-4 h-4" />
             </button>
           </div>
-
         </div>
 
       </div>

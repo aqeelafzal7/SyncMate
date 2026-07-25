@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, Task, PrayerTimings, WeatherData } from '../types';
 import { getDangerousHabitStreaks } from '../lib/habitService';
+import { getFormattedHijriDate } from '../lib/contextService';
 import { IslamicInsightModal } from './IslamicInsightModal';
 import { BirthdayCard } from './BirthdayCard';
 import { checkIsBirthday, getMsUntilMidnight } from '../lib/birthdayUtils';
@@ -36,6 +37,7 @@ interface TimelineProps {
   tasks: Task[];
   prayerTimings: PrayerTimings | null;
   weather: WeatherData | null;
+  locationName?: string;
   activeMood?: string;
   onResetMood?: () => void;
   onAddTaskClick: (hourSlot?: string) => void;
@@ -50,6 +52,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   tasks,
   prayerTimings,
   weather,
+  locationName,
   activeMood,
   onResetMood,
   onAddTaskClick,
@@ -265,10 +268,11 @@ export const Timeline: React.FC<TimelineProps> = ({
 
   const gregorianDateFormatted = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
-    day: 'numeric',
     month: 'long',
+    day: 'numeric',
     year: 'numeric'
   });
+  const hijriDateFormatted = prayerTimings?.dateHijri || getFormattedHijriDate();
 
   return (
     <div className="space-y-6">
@@ -282,16 +286,9 @@ export const Timeline: React.FC<TimelineProps> = ({
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           
           <div>
-            <div className="flex items-center space-x-2 text-indigo-300 text-xs font-semibold uppercase tracking-wider mb-1">
-              <Sparkles className="w-4 h-4 text-amber-300 animate-spin" />
-              <span>Context Engine Active</span>
-            </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
               Welcome back, {userProfile.name || 'User'}!
             </h1>
-            <p className="text-xs sm:text-sm text-indigo-200 mt-1 max-w-xl">
-              SyncMate has synchronized your timeline. {userProfile.religion === 'Muslim' || !userProfile.religion || userProfile.religion === 'None' ? 'Your 5 daily prayer anchors are strictly locked to protect your spiritual focus.' : 'Your daily deep-work focus slots are optimized.'}
-            </p>
           </div>
 
           {/* Quick Context Chips */}
@@ -302,10 +299,41 @@ export const Timeline: React.FC<TimelineProps> = ({
               <div>
                 <span className="block text-[10px] text-indigo-200 font-semibold uppercase tracking-wider">Dual Calendar</span>
                 <span className="font-bold text-white text-xs sm:text-sm">
-                  {gregorianDateFormatted}{prayerTimings?.dateHijri ? ` | ${prayerTimings.dateHijri}` : ''}
+                  {gregorianDateFormatted} | {hijriDateFormatted}
                 </span>
               </div>
             </div>
+
+            {/* Location Button Chip */}
+            <button
+              onClick={onOpenCitySearch}
+              className="bg-white/10 backdrop-blur-md hover:bg-white/20 transition-all px-3.5 py-2 rounded-2xl border border-white/10 text-xs flex items-center space-x-2.5 text-left group cursor-pointer"
+              title="Search or change city location"
+            >
+              <MapPin className="w-4 h-4 text-indigo-300 shrink-0" />
+              <div>
+                <span className="block text-[10px] text-indigo-200 font-semibold uppercase tracking-wider flex items-center space-x-1">
+                  <span>Location</span>
+                  <span className="text-[9px] text-indigo-200 bg-white/10 px-1 rounded">✏️ Edit</span>
+                </span>
+                <span className="font-bold text-white text-xs sm:text-sm truncate max-w-[140px] block">
+                  {locationName || userProfile.location?.city || 'Set Location'}
+                </span>
+              </div>
+            </button>
+
+            {/* Weather Chip */}
+            {weather && (
+              <div className="bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-white/10 text-xs flex items-center space-x-2.5">
+                <CloudSun className="w-4 h-4 text-amber-300 shrink-0" />
+                <div>
+                  <span className="block text-[10px] text-indigo-200 font-semibold uppercase tracking-wider">Live Weather</span>
+                  <span className="font-bold text-white text-xs sm:text-sm">
+                    {weather.temperature}°C • {weather.condition}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
         </div>
@@ -630,7 +658,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                               : 'bg-white dark:bg-slate-800/90 border-slate-200 dark:border-slate-700 shadow-md hover:shadow-lg'
                           }`}
                         >
-                          <div className="flex items-start justify-between gap-3">
+                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                             <div className="flex items-start space-x-3">
                               <button
                                 onClick={() => onToggleTaskStatus(t)}
@@ -690,7 +718,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                               </div>
                             </div>
 
-                            <div className="flex items-center space-x-2 shrink-0">
+                            <div className="flex items-center space-x-2 shrink-0 self-end sm:self-auto mt-2 sm:mt-0">
                               <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-md font-mono">
                                 {t.startTime} - {t.endTime}
                               </span>

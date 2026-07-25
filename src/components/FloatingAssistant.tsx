@@ -451,7 +451,7 @@ Once you confirm, I will place it in your schedule with a proactive prep tip!`,
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[580px] transition-all">
+    <div className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-50 w-[calc(100%-2rem)] md:w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[520px] sm:h-[580px] transition-all">
       
       {/* Drawer Header */}
       <div className="p-4 bg-gradient-to-r from-indigo-900 to-purple-900 text-white flex items-center justify-between">

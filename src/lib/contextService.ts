@@ -213,6 +213,32 @@ export async function searchCityCoordinates(cityName: string): Promise<UserLocat
 
 
 /**
+ * Format complete Hijri Date string (e.g. "11 Safar 1448 AH")
+ */
+export function getFormattedHijriDate(date = new Date()): string {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-TN-u-ca-islamic-uma', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+    const parts = formatter.formatToParts(date);
+    let day = '', month = '', year = '';
+    for (const p of parts) {
+      if (p.type === 'day') day = p.value;
+      if (p.type === 'month') month = p.value;
+      if (p.type === 'year') year = p.value;
+    }
+    if (day && month && year) {
+      return `${day} ${month} ${year} AH`;
+    }
+  } catch {
+    // Ignore and use fallback
+  }
+  return "11 Safar 1448 AH";
+}
+
+/**
  * Fetch Islamic Prayer Timings from Aladhan API (Method 1: ISNA / Method 2: MWL)
  */
 export async function fetchPrayerTimings(lat: number, lng: number): Promise<PrayerTimings | null> {
@@ -232,7 +258,7 @@ export async function fetchPrayerTimings(lat: number, lng: number): Promise<Pray
       const gDate = data.data.date?.readable || today.toLocaleDateString();
       const hDate = data.data.date?.hijri 
         ? `${data.data.date.hijri.day} ${data.data.date.hijri.month.en} ${data.data.date.hijri.year} AH` 
-        : undefined;
+        : getFormattedHijriDate(today);
 
       return {
         Fajr: cleanTime(timings.Fajr),
@@ -256,7 +282,7 @@ export async function fetchPrayerTimings(lat: number, lng: number): Promise<Pray
       Maghrib: "18:20",
       Isha: "19:40",
       dateGregorian: new Date().toLocaleDateString(),
-      dateHijri: "1447 AH"
+      dateHijri: getFormattedHijriDate()
     };
   }
 }

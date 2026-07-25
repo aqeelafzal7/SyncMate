@@ -29,7 +29,6 @@ import { SettingsView } from './components/SettingsView';
 import { FloatingAssistant } from './components/FloatingAssistant';
 import { TaskModal } from './components/TaskModal';
 import { ProjectsView } from './components/ProjectsView';
-import { ActiveTimerModal } from './components/ActiveTimerModal';
 import { CitySearchModal } from './components/CitySearchModal';
 import { DobCollectionModal } from './components/DobCollectionModal';
 import { BirthdayBalloonsOverlay } from './components/BirthdayBalloonsOverlay';
@@ -50,6 +49,7 @@ export default function App() {
   // App View & Sidebar State
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isCitySearchOpen, setIsCitySearchOpen] = useState(false);
@@ -68,8 +68,6 @@ export default function App() {
   // Modal State
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [taskModalDefaultSlot, setTaskModalDefaultSlot] = useState<string | undefined>(undefined);
-  const [isTimerModalOpen, setIsTimerModalOpen] = useState(false);
-  const [completedTaskTitle, setCompletedTaskTitle] = useState<string | undefined>(undefined);
 
 
   // Theme Sync Effect
@@ -265,10 +263,9 @@ export default function App() {
     const newStatus = task.status === 'completed' ? 'todo' : 'completed';
     await updateTaskInFirestore(task.id, userProfile.uid, { status: newStatus });
 
-    // Task Completion Trigger: Open Micro-Habit Injector & Active Timer Modal
+    // Task Completion Trigger: Cleanly route to dedicated Habits page for active rest
     if (newStatus === 'completed') {
-      setCompletedTaskTitle(task.title);
-      setIsTimerModalOpen(true);
+      setActiveTab('habits');
     }
   };
 
@@ -342,7 +339,7 @@ export default function App() {
 
   // Main Executive Lifestyle OS Layout
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
+    <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
       
       {/* Persistent Left Sidebar Navigation */}
       <Sidebar
@@ -356,6 +353,8 @@ export default function App() {
         onToggleAssistant={() => setIsAssistantOpen(!isAssistantOpen)}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        isMobileSidebarOpen={isMobileSidebarOpen}
+        onCloseMobileSidebar={() => setIsMobileSidebarOpen(false)}
       />
 
       {/* Main Content Area (Offset for Desktop Sidebar) */}
@@ -366,17 +365,15 @@ export default function App() {
           userProfile={userProfile}
           theme={theme}
           onThemeChange={setTheme}
-          weather={weather}
-          locationName={userProfile?.location?.city}
-          onOpenCitySearch={() => setIsCitySearchOpen(true)}
           onSignOut={handleSignOut}
           onOpenOnboarding={() => setShowOnboarding(true)}
           onToggleAssistant={() => setIsAssistantOpen(!isAssistantOpen)}
           isAssistantOpen={isAssistantOpen}
+          onToggleMobileSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
         />
 
         {/* Dynamic View Router */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-28 space-y-6">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-28 sm:pb-8 space-y-6">
           
           {/* Dashboard View (Timeline) */}
           {activeTab === 'dashboard' && userProfile && (
@@ -385,6 +382,7 @@ export default function App() {
               tasks={tasks}
               prayerTimings={prayerTimings}
               weather={weather}
+              locationName={userProfile?.location?.city}
               activeMood={userProfile.activeMood || 'neutral'}
               onResetMood={handleResetActiveMood}
               onAddTaskClick={(slot) => {
@@ -393,9 +391,8 @@ export default function App() {
               }}
               onToggleTaskStatus={handleToggleTaskStatus}
               onDeleteTask={handleDeleteTask}
-              onOpenTimerModal={(taskTitle, mins) => {
-                setCompletedTaskTitle(taskTitle);
-                setIsTimerModalOpen(true);
+              onOpenTimerModal={() => {
+                setActiveTab('habits');
               }}
               onOpenCitySearch={() => setIsCitySearchOpen(true)}
             />
@@ -481,14 +478,6 @@ export default function App() {
           onUpdateActiveMood={handleUpdateActiveMood}
         />
       )}
-
-      {/* Active Micro-Habit & Rest Timer Modal */}
-      <ActiveTimerModal
-        isOpen={isTimerModalOpen}
-        onClose={() => setIsTimerModalOpen(false)}
-        taskTitle={completedTaskTitle}
-        initialMinutes={5}
-      />
 
       {/* Manual City Search & High-Accuracy GPS Override Modal */}
       <CitySearchModal

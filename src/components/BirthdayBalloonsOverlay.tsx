@@ -31,6 +31,26 @@ export const BirthdayBalloonsOverlay: React.FC<BirthdayBalloonsOverlayProps> = (
     initY: 0
   });
 
+  // Party Popper FAB Position & Drag State
+  const [popperPos, setPopperPos] = useState<{ x: number; y: number } | null>(null);
+  const popperDraggingRef = useRef<boolean>(false);
+  const popperMovedRef = useRef<boolean>(false);
+  const popperDragStartRef = useRef<{ startX: number; startY: number; initX: number; initY: number }>({
+    startX: 0,
+    startY: 0,
+    initX: 0,
+    initY: 0
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isMobile = window.innerWidth < 768;
+      const initX = isMobile ? Math.max(16, window.innerWidth - 80) : Math.max(16, window.innerWidth - 96);
+      const initY = isMobile ? 100 : Math.max(100, window.innerHeight - 100);
+      setPopperPos({ x: initX, y: initY });
+    }
+  }, []);
+
   useEffect(() => {
     if (!isBirthdayMode) {
       setBalloons([]);
@@ -177,6 +197,58 @@ export const BirthdayBalloonsOverlay: React.FC<BirthdayBalloonsOverlayProps> = (
     }
   };
 
+  // Party Popper Pointer Drag Handlers
+  const handlePopperPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    const currentX = popperPos ? popperPos.x : (window.innerWidth < 768 ? window.innerWidth - 80 : window.innerWidth - 96);
+    const currentY = popperPos ? popperPos.y : (window.innerWidth < 768 ? 100 : window.innerHeight - 100);
+
+    popperDraggingRef.current = true;
+    popperMovedRef.current = false;
+    popperDragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initX: currentX,
+      initY: currentY
+    };
+
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePopperPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!popperDraggingRef.current) return;
+    e.stopPropagation();
+
+    const dx = e.clientX - popperDragStartRef.current.startX;
+    const dy = e.clientY - popperDragStartRef.current.startY;
+
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      popperMovedRef.current = true;
+    }
+
+    const newX = popperDragStartRef.current.initX + dx;
+    const newY = popperDragStartRef.current.initY + dy;
+
+    setPopperPos({ x: newX, y: newY });
+  };
+
+  const handlePopperPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (popperDraggingRef.current) {
+      e.stopPropagation();
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch (err) {
+        // pointer capture released
+      }
+      popperDraggingRef.current = false;
+
+      // If user tapped without dragging, trigger confetti burst
+      if (!popperMovedRef.current) {
+        firePartyPopper();
+      }
+    }
+  };
+
   return (
     <>
       {/* 1. NON-BLOCKING BALLOONS OVERLAY (Z-INDEX 40) */}
@@ -232,18 +304,27 @@ export const BirthdayBalloonsOverlay: React.FC<BirthdayBalloonsOverlayProps> = (
         })}
       </div>
 
-      {/* 2. INTERACTIVE PARTY POPPER FAB (CONFETTI CANNON - Z-INDEX 55) */}
-      <div className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 z-[55] pointer-events-auto flex flex-col items-end space-y-2 group">
+      {/* 2. INTERACTIVE DRAGGABLE PARTY POPPER FAB (CONFETTI CANNON - Z-INDEX 55) */}
+      <div 
+        style={popperPos ? { position: 'fixed', left: `${popperPos.x}px`, top: `${popperPos.y}px`, touchAction: 'none' } : { touchAction: 'none' }}
+        onPointerDown={handlePopperPointerDown}
+        onPointerMove={handlePopperPointerMove}
+        onPointerUp={handlePopperPointerUp}
+        onPointerCancel={handlePopperPointerUp}
+        className={`z-[55] pointer-events-auto flex flex-col items-end space-y-2 group cursor-grab active:cursor-grabbing select-none ${!popperPos ? 'fixed bottom-6 right-6 sm:bottom-8 sm:right-8' : ''}`}
+      >
         
         {/* Hover Tooltip Pill */}
         <div className="px-3 py-1.5 rounded-2xl bg-slate-900/90 dark:bg-slate-950/90 border border-amber-400/40 text-amber-300 text-[11px] font-extrabold shadow-xl backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center space-x-1.5 pointer-events-none">
           <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" />
-          <span>Birthday Party Popper! Tap to Celebrate! 🎉</span>
+          <span>Birthday Party Popper! Drag or Tap to Celebrate! 🎉</span>
         </div>
 
         {/* FAB Button */}
         <button
-          onClick={firePartyPopper}
+          onClick={(e) => {
+            e.preventDefault();
+          }}
           className="relative p-4 rounded-3xl bg-gradient-to-tr from-amber-500 via-purple-600 to-indigo-600 text-white shadow-2xl border-2 border-amber-300 hover:scale-110 active:scale-95 transition-all duration-200 group/btn"
           title="Fire Party Popper Confetti Explosion! 💥"
         >

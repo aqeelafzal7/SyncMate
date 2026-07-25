@@ -10,8 +10,8 @@ import {
   ChevronLeft, 
   ChevronRight, 
   Bot, 
-  Compass,
-  UserCheck
+  UserCheck,
+  X
 } from 'lucide-react';
 import { ActiveTab, UserProfile } from '../types';
 
@@ -24,6 +24,8 @@ interface SidebarProps {
   onToggleAssistant: () => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  isMobileSidebarOpen?: boolean;
+  onCloseMobileSidebar?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -35,6 +37,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleAssistant,
   isCollapsed,
   onToggleCollapse,
+  isMobileSidebarOpen = false,
+  onCloseMobileSidebar,
 }) => {
   const navItems = [
     { id: 'dashboard' as ActiveTab, label: 'Dashboard', icon: LayoutDashboard },
@@ -45,12 +49,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'settings' as ActiveTab, label: 'Settings', icon: Settings },
   ];
 
+  // Reserve bottom floating nav ONLY for core primary tabs (Dashboard, Today Wear, My Look, Habits)
+  const primaryBottomNavItems = navItems.filter((item) => item.id !== 'projects' && item.id !== 'settings');
+
+  const handleSelectTab = (tab: ActiveTab) => {
+    onSelectTab(tab);
+    onCloseMobileSidebar?.();
+  };
+
   return (
     <>
-      {/* Desktop Persistent Left Sidebar */}
+      {/* Dark Blurred Backdrop on Mobile */}
+      {isMobileSidebarOpen && (
+        <div
+          onClick={onCloseMobileSidebar}
+          className="md:hidden fixed inset-0 z-[90] bg-slate-950/80 backdrop-blur-sm animate-fadeIn"
+        />
+      )}
+
+      {/* Off-Canvas Mobile Sidebar & Desktop Sidebar */}
       <aside
-        className={`hidden md:flex flex-col fixed left-0 top-0 h-screen bg-slate-900 border-r border-slate-800 text-white z-50 transition-all duration-300 ${
-          isCollapsed ? 'w-20' : 'w-64'
+        className={`flex flex-col fixed inset-y-0 left-0 z-[100] bg-slate-900 border-r border-slate-800 text-white transform transition-transform duration-300 ${
+          isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } md:translate-x-0 ${
+          isCollapsed ? 'md:w-20' : 'w-64'
         }`}
       >
         {/* Brand Header - Master Brand Anchor */}
@@ -61,7 +83,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               alt="SyncMate Logo" 
               className="w-10 h-10 object-contain rounded-xl shrink-0 shadow-md shadow-indigo-500/20" 
             />
-            {!isCollapsed && (
+            {(!isCollapsed || isMobileSidebarOpen) && (
               <div className="animate-fadeIn">
                 <div className="flex items-center space-x-1.5">
                   <span className="font-bold text-lg tracking-tight text-white">
@@ -78,28 +100,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
 
-          <button
-            onClick={onToggleCollapse}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-            title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-          >
-            {isCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
-          </button>
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={onCloseMobileSidebar}
+              className="md:hidden p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              title="Close Navigation"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <button
+              onClick={onToggleCollapse}
+              className="hidden md:block p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+            >
+              {isCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+            </button>
+          </div>
         </div>
 
         {/* AI Assistant Trigger */}
         <div className="p-3">
           <button
-            onClick={onToggleAssistant}
+            onClick={() => {
+              onToggleAssistant();
+              onCloseMobileSidebar?.();
+            }}
             className={`w-full py-2.5 px-3 rounded-2xl bg-gradient-to-r from-indigo-600/90 to-purple-600/90 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center transition-all ${
-              isCollapsed ? 'justify-center' : 'justify-between'
+              isCollapsed && !isMobileSidebarOpen ? 'justify-center' : 'justify-between'
             }`}
           >
             <div className="flex items-center space-x-2.5">
               <Bot className="w-4 h-4 animate-pulse shrink-0 text-indigo-200" />
-              {!isCollapsed && <span>AI Assistant</span>}
+              {(!isCollapsed || isMobileSidebarOpen) && <span>AI Assistant</span>}
             </div>
-            {!isCollapsed && (
+            {(!isCollapsed || isMobileSidebarOpen) && (
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             )}
           </button>
@@ -113,9 +147,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             return (
               <button
                 key={item.id}
-                onClick={() => onSelectTab(item.id)}
+                onClick={() => handleSelectTab(item.id)}
                 className={`w-full flex items-center transition-all rounded-2xl px-3.5 py-3 text-xs font-bold ${
-                  isCollapsed ? 'justify-center' : 'justify-between'
+                  isCollapsed && !isMobileSidebarOpen ? 'justify-center' : 'justify-between'
                 } ${
                   isActive
                     ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
@@ -125,10 +159,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <div className="flex items-center space-x-3">
                   <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                  {!isCollapsed && <span>{item.label}</span>}
+                  {(!isCollapsed || isMobileSidebarOpen) && <span>{item.label}</span>}
                 </div>
 
-                {!isCollapsed && item.badge && (
+                {(!isCollapsed || isMobileSidebarOpen) && item.badge && (
                   <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-indigo-500/30 text-indigo-300 border border-indigo-400/30">
                     {item.badge}
                   </span>
@@ -140,7 +174,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* User Profile & Sign Out Footer */}
         <div className="p-3 border-t border-slate-800/80 bg-slate-950/40">
-          {!isCollapsed && userProfile && (
+          {(!isCollapsed || isMobileSidebarOpen) && userProfile && (
             <div className="mb-3 p-2.5 rounded-2xl bg-slate-800/50 border border-slate-700/50 flex items-center justify-between">
               <div className="truncate">
                 <span className="block text-xs font-bold text-white truncate">
@@ -151,7 +185,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </span>
               </div>
               <button
-                onClick={onOpenOnboarding}
+                onClick={() => {
+                  onOpenOnboarding();
+                  onCloseMobileSidebar?.();
+                }}
                 className="p-1 rounded-lg text-slate-400 hover:text-indigo-400 hover:bg-slate-700 transition-colors"
                 title="Edit Assistant Profile"
               >
@@ -161,27 +198,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           <button
-            onClick={onSignOut}
+            onClick={() => {
+              onSignOut();
+              onCloseMobileSidebar?.();
+            }}
             className={`w-full py-2.5 px-3 rounded-2xl bg-slate-800 hover:bg-red-950/80 hover:text-red-300 text-slate-400 text-xs font-bold transition-all flex items-center ${
-              isCollapsed ? 'justify-center' : 'space-x-2'
+              isCollapsed && !isMobileSidebarOpen ? 'justify-center' : 'space-x-2'
             }`}
             title="Sign Out"
           >
             <LogOut className="w-4 h-4 shrink-0" />
-            {!isCollapsed && <span>Sign Out</span>}
+            {(!isCollapsed || isMobileSidebarOpen) && <span>Sign Out</span>}
           </button>
         </div>
       </aside>
 
       {/* Mobile Floating Bottom Navbar */}
-      <nav className="md:hidden fixed bottom-3 left-3 right-3 z-50 bg-slate-900/90 backdrop-blur-xl border border-slate-800/90 rounded-3xl p-2 shadow-2xl flex items-center justify-around text-white">
-        {navItems.map((item) => {
+      <nav className={`md:hidden fixed bottom-3 left-3 right-3 z-[100] bg-slate-900/90 backdrop-blur-xl border border-slate-800/90 rounded-3xl p-2 shadow-2xl flex items-center justify-around text-white transition-all duration-500 ease-in-out ${
+        isMobileSidebarOpen ? 'opacity-0 translate-y-12 pointer-events-none' : 'opacity-100 translate-y-0'
+      }`}>
+        {primaryBottomNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
           return (
             <button
               key={item.id}
-              onClick={() => onSelectTab(item.id)}
+              onClick={() => handleSelectTab(item.id)}
               className={`flex flex-col items-center justify-center p-2 rounded-2xl transition-all ${
                 isActive ? 'text-indigo-400 font-bold scale-105' : 'text-slate-400'
               }`}
