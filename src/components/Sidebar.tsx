@@ -11,9 +11,12 @@ import {
   ChevronRight, 
   Bot, 
   UserCheck,
-  X
+  X,
+  Sun,
+  Moon,
+  Monitor
 } from 'lucide-react';
-import { ActiveTab, UserProfile } from '../types';
+import { ActiveTab, UserProfile, ThemeMode } from '../types';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -27,6 +30,8 @@ interface SidebarProps {
   isMobileSidebarOpen?: boolean;
   onCloseMobileSidebar?: () => void;
   hideBottomNav?: boolean;
+  theme?: ThemeMode;
+  onThemeChange?: (mode: ThemeMode) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -41,6 +46,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isMobileSidebarOpen = false,
   onCloseMobileSidebar,
   hideBottomNav = false,
+  theme = 'system',
+  onThemeChange,
 }) => {
   const navItems = [
     { id: 'dashboard' as ActiveTab, label: 'Dashboard', icon: LayoutDashboard },
@@ -174,6 +181,87 @@ export const Sidebar: React.FC<SidebarProps> = ({
             );
           })}
         </nav>
+
+        {/* Theme Mode Control Bar */}
+        {onThemeChange && (
+          <div className="p-3 border-t border-slate-800/80 bg-slate-950/20">
+            {(!isCollapsed || isMobileSidebarOpen) ? (
+              <div>
+                <div className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 px-3">
+                  THEME MODE
+                </div>
+                <div className="grid grid-cols-3 gap-1 bg-slate-800/50 p-1 rounded-xl border border-slate-700/50">
+                  <button
+                    onClick={() => onThemeChange('light')}
+                    title="Light Theme"
+                    className={`flex items-center justify-center space-x-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
+                      theme === 'light'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                    }`}
+                  >
+                    <Sun className="w-3.5 h-3.5 shrink-0" />
+                    <span>Light</span>
+                  </button>
+                  <button
+                    onClick={() => onThemeChange('dark')}
+                    title="Dark Theme"
+                    className={`flex items-center justify-center space-x-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
+                      theme === 'dark'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                    }`}
+                  >
+                    <Moon className="w-3.5 h-3.5 shrink-0" />
+                    <span>Dark</span>
+                  </button>
+                  <button
+                    onClick={() => onThemeChange('system')}
+                    title="System Theme"
+                    className={`flex items-center justify-center space-x-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
+                      theme === 'system'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                    }`}
+                  >
+                    <Monitor className="w-3.5 h-3.5 shrink-0" />
+                    <span>System</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-1 bg-slate-800/50 p-1 rounded-xl border border-slate-700/50">
+                <button
+                  onClick={() => onThemeChange('light')}
+                  title="Light Theme"
+                  className={`p-1.5 rounded-lg text-xs transition-all ${
+                    theme === 'light' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Sun className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => onThemeChange('dark')}
+                  title="Dark Theme"
+                  className={`p-1.5 rounded-lg text-xs transition-all ${
+                    theme === 'dark' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Moon className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => onThemeChange('system')}
+                  title="System Theme"
+                  className={`p-1.5 rounded-lg text-xs transition-all ${
+                    theme === 'system' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Monitor className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* User Profile & Sign Out Footer */}
         <div className="p-3 border-t border-slate-800/80 bg-slate-950/40">

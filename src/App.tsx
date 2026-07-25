@@ -379,6 +379,8 @@ export default function App() {
         isMobileSidebarOpen={isMobileSidebarOpen}
         onCloseMobileSidebar={() => setIsMobileSidebarOpen(false)}
         hideBottomNav={hideBottomNav}
+        theme={theme}
+        onThemeChange={setTheme}
       />
 
       {/* Main Content Area (Offset for Desktop Sidebar) */}

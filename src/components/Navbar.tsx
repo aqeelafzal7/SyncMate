@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Sun, 
-  Moon, 
-  Monitor, 
   Menu,
   Key,
   Sparkles
@@ -13,8 +10,8 @@ import { getDecryptedApiKey } from '../lib/cryptoStorage';
 
 interface NavbarProps {
   userProfile: UserProfile | null;
-  theme: ThemeMode;
-  onThemeChange: (mode: ThemeMode) => void;
+  theme?: ThemeMode;
+  onThemeChange?: (mode: ThemeMode) => void;
   onSignOut: () => void;
   onOpenOnboarding: () => void;
   onToggleAssistant: () => void;
@@ -23,8 +20,6 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  theme,
-  onThemeChange,
   onToggleMobileSidebar,
 }) => {
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
@@ -73,7 +68,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
 
-          {/* Right Side: API Key Badge + Theme Controls */}
+          {/* Right Side: API Key Badge */}
           <div className="flex items-center space-x-2 sm:space-x-3">
             
             {/* API Key Status Indicator Badge */}
@@ -100,43 +95,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </>
               )}
             </button>
-
-            {/* Theme Switcher */}
-            <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700 shrink-0">
-              <button
-                onClick={() => onThemeChange('light')}
-                title="Light Theme"
-                className={`p-1.5 rounded-lg text-xs font-medium transition-all ${
-                  theme === 'light'
-                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                }`}
-              >
-                <Sun className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => onThemeChange('dark')}
-                title="Dark Theme"
-                className={`p-1.5 rounded-lg text-xs font-medium transition-all ${
-                  theme === 'dark'
-                    ? 'bg-slate-700 text-indigo-400 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                }`}
-              >
-                <Moon className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => onThemeChange('system')}
-                title="System Theme"
-                className={`p-1.5 rounded-lg text-xs font-medium transition-all ${
-                  theme === 'system'
-                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                }`}
-              >
-                <Monitor className="w-4 h-4" />
-              </button>
-            </div>
           </div>
 
         </div>
