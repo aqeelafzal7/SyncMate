@@ -186,45 +186,107 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
 
     try {
       const activeApiKey = localStorage.getItem('syncmate_gemini_api_key') || undefined;
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: 'assistant',
-          customApiKey: activeApiKey,
-          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-          context: {
-            userProfile,
-            tasks: tasks.map(t => ({ id: t.id, title: t.title, startTime: t.startTime, endTime: t.endTime, status: t.status })),
-            prayerTimings,
-            weather,
-            currentLocalTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }
-        }),
-      });
+      let replyText = '';
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        let parsedMsg = 'AI request failed.';
-        try {
-          if (errorText) {
-            const errJson = JSON.parse(errorText);
-            parsedMsg = errJson.message || errJson.error || parsedMsg;
-          }
-        } catch {
-          parsedMsg = `Server error (${res.status}). Please check your API key setup.`;
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: 'assistant',
+            customApiKey: activeApiKey,
+            messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+            context: {
+              userProfile,
+              tasks: tasks.map(t => ({ id: t.id, title: t.title, startTime: t.startTime, endTime: t.endTime, status: t.status })),
+              prayerTimings,
+              weather,
+              currentLocalTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error(`Backend /api/chat returned status ${res.status}`);
         }
-        throw new Error(parsedMsg);
+
+        const resText = await res.text();
+        if (!resText || !resText.trim()) {
+          throw new Error('Received empty response from backend.');
+        }
+
+        const data = JSON.parse(resText);
+        replyText = data.reply || '';
+      } catch (serverErr: any) {
+        console.warn('Backend /api/chat endpoint failed or unavailable, attempting direct client-side Gemini fallback:', serverErr);
+
+        if (!activeApiKey) {
+          throw new Error('Backend server is unavailable and no personal Gemini API key was found. Please click "🔑 API Key" in the chat header to enter your API key.');
+        }
+
+        const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${activeApiKey}`;
+        const systemInstruction = `You are SyncMate, an elite, Autonomous AI Assistant and Fitness Coach for ${userProfile.name || 'User'}. You must be conversational, sharp, and highly proactive.
+
+CRITICAL OPERATIONAL & FITNESS RULES:
+1. INQUISITIVE & PROACTIVE: When given vague goals, ask 1-2 sharp clarifying questions. If the user asks for fitness/health goals (e.g. weight loss, height/posture stretching, core strength, no-equipment workouts), ask: "How many days a week can you commit, and what time of day works best (morning or evening)?"
+2. AUTONOMOUS AI FITNESS COACH (Zero Equipment):
+   - When asked for workout or fitness guidance, generate a tailored equipment-free routine (e.g., Jumping Jacks, Bodyweight Squats, Wall Sits, Cobra Stretches, Planks).
+   - Always list exercise names, set/repetition guidelines or duration (e.g. 45s Plank, 3 sets), and form tips.
+3. RELIGION & PRAYER ANCHORS: Keep timeline tasks intelligently scheduled around non-negotiable Islamic prayer times (Fajr: ${prayerTimings?.Fajr || 'N/A'}, Dhuhr: ${prayerTimings?.Dhuhr || 'N/A'}, Asr: ${prayerTimings?.Asr || 'N/A'}, Maghrib: ${prayerTimings?.Maghrib || 'N/A'}, Isha: ${prayerTimings?.Isha || 'N/A'}).
+4. STRUCTURED ACTION OUTPUT: When proposing a task or fitness plan, append a markdown JSON action code block at the end:
+For a single task:
+\`\`\`json_action
+{
+  "action": "CREATE_TASK",
+  "data": {
+    "title": "🏋️ Fitness Focus: Core & Bodyweight",
+    "description": "3 Sets: 15 Squats, 45s Plank, Cobra Stretch. Form tip: Engage core.",
+    "startTime": "06:30",
+    "endTime": "07:00",
+    "category": "health",
+    "aiTip": "Scheduled after Fajr prayer for peak mental focus."
+  }
+}
+\`\`\`
+5. EMOTIONAL SENTIMENT TRACKING: Analyze the user's incoming message tone and emotional state. If a clear emotional state is detected (e.g. "anxious", "grateful", "stressed", "joyful", "sad", "overwhelmed", "hopeful"), update detectedMood to that emotion. If neutral or factual, set detectedMood to "neutral". Always append a sentiment code block at the very end of your response:
+\`\`\`json_mood
+{
+  "detectedMood": "anxious"
+}
+\`\`\`
+
+Current User Context:
+${JSON.stringify({ userProfile, tasks: tasks.map(t => ({ id: t.id, title: t.title, startTime: t.startTime, endTime: t.endTime, status: t.status })), prayerTimings, weather, currentLocalTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }, null, 2)}`;
+
+        const formattedContents = newMessages.map(m => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content }]
+        }));
+
+        const directRes = await fetch(directUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: formattedContents,
+            systemInstruction: {
+              parts: [{ text: systemInstruction }]
+            }
+          })
+        });
+
+        if (!directRes.ok) {
+          const directErrText = await directRes.text();
+          let directErrMsg = `Direct Gemini API error (${directRes.status})`;
+          try {
+            const parsedErr = JSON.parse(directErrText);
+            directErrMsg = parsedErr.error?.message || directErrMsg;
+          } catch {}
+          throw new Error(directErrMsg);
+        }
+
+        const directData = await directRes.json();
+        replyText = directData.candidates?.[0]?.content?.parts?.[0]?.text || 'I am ready to assist you.';
       }
-
-      const errorText = await res.text();
-      if (!errorText || !errorText.trim()) {
-        throw new Error('Received an empty response from AI engine. Please retry.');
-      }
-
-      const data = JSON.parse(errorText);
-
-      const replyText = data.reply || 'I am ready to assist you.';
 
       // Parse potential json_action block
       const actionMatch = replyText.match(/```json_action\s*([\s\S]*?)\s*```/);

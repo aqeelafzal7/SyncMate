@@ -202,31 +202,6 @@ export async function fetchSpecificAyah(surah: number, ayah: number): Promise<Qu
 export async function fetchHadithByTheme(keyword: string): Promise<HadithData> {
   const lowerKw = (keyword || '').toLowerCase();
 
-  // Try verified random Hadith endpoints first
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-    const res = await fetch('https://random-hadith-generator.vercel.app/bukhari/', { signal: controller.signal });
-    clearTimeout(timeoutId);
-
-    if (res.ok) {
-      const json = await res.json();
-      if (json.data && (json.data.hadith_english || json.data.hadith_urdu)) {
-        const d = json.data;
-        return {
-          arabic: d.hadith_arabic || d.arabic || '',
-          english: d.hadith_english || d.english || '',
-          urdu: d.hadith_urdu || d.urdu || 'نبی کریم صلی اللہ علیہ وسلم کی احادیث مبارکہ ہدایت کا چشمہ ہیں۔',
-          reference: d.refno || d.reference || 'Sahih al-Bukhari',
-          book: d.header || 'Sahih al-Bukhari',
-        };
-      }
-    }
-  } catch {
-    // proceed to keyword match or fallback
-  }
-
   // Theme-mapped authentic Hadiths
   if (lowerKw.includes('patience') || lowerKw.includes('hardship') || lowerKw.includes('stress')) {
     return {
@@ -274,6 +249,9 @@ export async function getEmotionalIslamicInsight(
 ): Promise<EmotionalInsightResult> {
   const activeMood = currentMood || localStorage.getItem('syncmate_current_mood') || 'Neutral';
   const recentlyShown = getRecentlyShownInsights();
+  const activeApiKey = customApiKey || localStorage.getItem('syncmate_gemini_api_key') || '';
+
+  let replyText = '';
 
   try {
     const res = await fetch('/api/chat', {
@@ -281,7 +259,7 @@ export async function getEmotionalIslamicInsight(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         mode: 'recommend_islamic_ref',
-        customApiKey,
+        customApiKey: activeApiKey,
         context: {
           currentMood: activeMood,
           recentlyShown,
@@ -292,11 +270,59 @@ export async function getEmotionalIslamicInsight(
 
     if (res.ok) {
       const data = await res.json();
-      const replyText = data.reply || '';
+      replyText = data.reply || '';
+    } else {
+      throw new Error(`Server returned status ${res.status}`);
+    }
+  } catch (err) {
+    console.warn('Emotional Reference Router API call failed, attempting direct Gemini REST API:', err);
 
-      // Extract JSON block from Reference Router response
-      const jsonMatch = replyText.match(/```json\s*([\s\S]*?)\s*```/) || replyText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
+    if (activeApiKey) {
+      try {
+        const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${activeApiKey}`;
+        const refSystemInstruction = `You are SyncMate's Islamic Reference Router.
+${isBirthday ? "Today is the user's birthday. Select a Quranic Ayah and authentic Hadith keyword specifically focusing on gratitude for the gift of life, health, the passage of time, and purpose of creation." : `The user's current mood is "${activeMood}".`}
+Recommend one highly relevant Quranic Ayah and one relevant authentic Hadith theme that provides comfort, perspective, guidance, or shared joy matching their emotional state.
+
+CRITICAL RULES:
+1. You must NOT generate the text of the Ayah or Hadith! Zero text generation.
+2. You must ONLY return a JSON object with the exact Surah number (1 to 114) and Ayah number, a search keyword for the Hadith (e.g., "patience", "gratitude", "prayer", "trust", "hardship", "hope", "good_deeds"), and a short, comforting contextHeading explaining why this verse suits their current emotional mood.
+3. Avoid these recently shown Surah:Ayah combinations: ${JSON.stringify(recentlyShown)}.
+
+Output strictly a markdown JSON code block as follows:
+\`\`\`json
+{
+  "surah": 94,
+  "ayah": 5,
+  "hadithKeyword": "gratitude",
+  "contextHeading": "A reflection for moments when you feel overwhelmed or stressed"
+}
+\`\`\``;
+
+        const directRes = await fetch(directUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: `Recommend Quran and Hadith reference for mood: "${activeMood}".` }] }],
+            systemInstruction: { parts: [{ text: refSystemInstruction }] }
+          })
+        });
+
+        if (directRes.ok) {
+          const directData = await directRes.json();
+          replyText = directData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        }
+      } catch (directErr) {
+        console.warn('Direct Gemini REST call failed for Islamic reference:', directErr);
+      }
+    }
+  }
+
+  if (replyText) {
+    // Extract JSON block from Reference Router response
+    const jsonMatch = replyText.match(/```json\s*([\s\S]*?)\s*```/) || replyText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
         const rawJsonStr = jsonMatch[1] || jsonMatch[0];
         const parsed = JSON.parse(rawJsonStr);
 
@@ -322,10 +348,10 @@ export async function getEmotionalIslamicInsight(
             currentMood: activeMood
           };
         }
+      } catch (e) {
+        console.warn('Failed to parse reference router JSON:', e);
       }
     }
-  } catch (err) {
-    console.warn('Emotional Reference Router call failed, resorting to authentic fallback:', err);
   }
 
   // Fallback to authentic fallback Ayah & Hadith
