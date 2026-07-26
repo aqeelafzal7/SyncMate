@@ -1,4 +1,7 @@
 import { UserProfile, SubscriptionTier } from './types';
+import { checkIsBirthday } from './birthdayUtils';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from './firebase';
 
 /**
  * Gets the default daily credits allocated for a specific tier.
@@ -76,9 +79,76 @@ export function calculateExpirationDate(months: number, startDate: Date = new Da
 }
 
 /**
+ * Checks if today is user's birthday and grants +10 Bonus Credits if not already granted this year.
+ */
+export function checkAndApplyBirthdayBonus(user: UserProfile): {
+  updatedProfile: UserProfile;
+  bonusApplied: boolean;
+} {
+  if (!user) return { updatedProfile: user, bonusApplied: false };
+
+  const dobStr = user.dateOfBirth || user.dob;
+  if (!dobStr) return { updatedProfile: user, bonusApplied: false };
+
+  const isBday = checkIsBirthday(dobStr);
+  if (!isBday) return { updatedProfile: user, bonusApplied: false };
+
+  const currentYear = new Date().getFullYear();
+  if (user.lastBirthdayBonusYear === currentYear) {
+    return { updatedProfile: user, bonusApplied: false };
+  }
+
+  const newCredits = (user.dailyCredits ?? 6) + 10;
+  const updatedProfile: UserProfile = {
+    ...user,
+    dailyCredits: newCredits,
+    lastBirthdayBonusYear: currentYear,
+    updatedAt: new Date().toISOString()
+  };
+
+  return { updatedProfile, bonusApplied: true };
+}
+
+/**
+ * Async helper that applies birthday bonus and persists changes to Firestore & localStorage.
+ */
+export async function processBirthdayBonusAsync(user: UserProfile): Promise<{
+  updatedProfile: UserProfile;
+  bonusApplied: boolean;
+}> {
+  const result = checkAndApplyBirthdayBonus(user);
+  if (result.bonusApplied) {
+    if (user.uid) {
+      try {
+        const userDocRef = doc(db, 'users', user.uid);
+        await updateDoc(userDocRef, {
+          dailyCredits: result.updatedProfile.dailyCredits,
+          lastBirthdayBonusYear: result.updatedProfile.lastBirthdayBonusYear,
+          updatedAt: result.updatedProfile.updatedAt
+        });
+      } catch (err) {
+        console.warn('Failed to sync birthday bonus to Firestore:', err);
+      }
+      const key = `syncmate_user_${user.uid}`;
+      localStorage.setItem(key, JSON.stringify(result.updatedProfile));
+    } else {
+      localStorage.setItem('syncmate_user_profile', JSON.stringify(result.updatedProfile));
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('syncmate_profile_updated', { detail: result.updatedProfile }));
+    }
+  }
+
+  return result;
+}
+
+/**
  * Combined helper to process both credit reset and subscription expiration checks in sequence.
  */
 export function processUserSubscriptionLifecycle(user: UserProfile): UserProfile {
   const afterExpirationCheck = checkSubscriptionExpiration(user);
-  return checkAndResetDailyCredits(afterExpirationCheck);
+  const afterCreditReset = checkAndResetDailyCredits(afterExpirationCheck);
+  const birthdayResult = checkAndApplyBirthdayBonus(afterCreditReset);
+  return birthdayResult.updatedProfile;
 }

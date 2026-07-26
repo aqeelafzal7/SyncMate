@@ -40,8 +40,10 @@ import { ProjectsView } from './components/ProjectsView';
 import { CitySearchModal } from './components/CitySearchModal';
 import { DobCollectionModal } from './components/DobCollectionModal';
 import { BirthdayBalloonsOverlay } from './components/BirthdayBalloonsOverlay';
+import { BirthdayRewardModal } from './components/BirthdayRewardModal';
+import { PrayerHadithView } from './components/PrayerHadithView';
 import { checkIsBirthday } from './lib/birthdayUtils';
-import { processUserSubscriptionLifecycle } from './lib/subscriptionService';
+import { processUserSubscriptionLifecycle, processBirthdayBonusAsync } from './lib/subscriptionService';
 
 import { Calendar, Target, Bot, Sparkles, Loader2, Timer, MapPin, Sun } from 'lucide-react';
 
@@ -105,6 +107,19 @@ export default function App() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [taskModalDefaultSlot, setTaskModalDefaultSlot] = useState<string | undefined>(undefined);
   const [isTimelineModalOpen, setIsTimelineModalOpen] = useState(false);
+  const [showBirthdayModal, setShowBirthdayModal] = useState(false);
+
+  // Automatic Birthday Bonus Check Effect
+  useEffect(() => {
+    if (userProfile && (userProfile.dob || userProfile.dateOfBirth)) {
+      processBirthdayBonusAsync(userProfile).then(({ updatedProfile, bonusApplied }) => {
+        if (bonusApplied) {
+          setUserProfile(updatedProfile);
+          setShowBirthdayModal(true);
+        }
+      });
+    }
+  }, [userProfile?.uid, userProfile?.dob, userProfile?.dateOfBirth]);
 
   const hideBottomNav = isMobileSidebarOpen || isAssistantOpen || isCitySearchOpen || isTaskModalOpen || isTimelineModalOpen || showOnboarding;
 
@@ -557,6 +572,14 @@ export default function App() {
             <HabitsView userProfile={userProfile} />
           )}
 
+          {/* 5x Daily Prayer, Quran & Hadith View (Always Free - 0 Credits) */}
+          {activeTab === 'prayer_hadith' && (
+            <PrayerHadithView
+              userProfile={userProfile}
+              prayerTimings={prayerTimings}
+            />
+          )}
+
           {/* Buy Subscription View */}
           {activeTab === 'buy_subscription' && (
             <BuySubscriptionView
@@ -637,6 +660,13 @@ export default function App() {
       {/* 24-Hour Birthday Mode Interactive Balloons & Confetti Overlay */}
       <BirthdayBalloonsOverlay
         isBirthdayMode={checkIsBirthday(userProfile?.dob)}
+      />
+
+      {/* Celebratory Birthday +10 Bonus Credits Reward Modal */}
+      <BirthdayRewardModal
+        isOpen={showBirthdayModal}
+        onClose={() => setShowBirthdayModal(false)}
+        userProfile={userProfile}
       />
 
     </div>

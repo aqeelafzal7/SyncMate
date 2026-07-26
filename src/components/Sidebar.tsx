@@ -14,6 +14,7 @@ import {
   X,
   Sun,
   Moon,
+  MoonStar,
   Monitor,
   Zap,
   ShieldCheck
@@ -60,6 +61,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'my_look' as ActiveTab, label: 'My Look', icon: Sparkles },
     { id: 'projects' as ActiveTab, label: 'Projects', icon: UserCheck },
     { id: 'habits' as ActiveTab, label: 'Habits', icon: CheckCircle2 },
+    { id: 'prayer_hadith' as ActiveTab, label: 'Prayer & Quran', icon: MoonStar, badge: 'Free' },
     { id: 'buy_subscription' as ActiveTab, label: '⭐ Buy Subscription', icon: Zap, badge: 'Pro', isGlowing: true },
     ...(isAdmin ? [{ id: 'admin_users' as ActiveTab, label: '🛡️ Admin Console', icon: ShieldCheck, badge: 'Admin' }] : []),
     { id: 'settings' as ActiveTab, label: 'Settings', icon: Settings },
