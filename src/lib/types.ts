@@ -12,6 +12,7 @@ export interface UserLocation {
   longitude: number;
   city?: string;
   country?: string;
+  areaLabel?: string;
   updatedAt?: string;
 }
 

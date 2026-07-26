@@ -18,6 +18,7 @@ import {
 } from './lib/firebase';
 import { UserProfile, UserLocation, ThemeMode, Task, Project, PrayerTimings, WeatherData, ActiveTab, WardrobeItem, StyleLog, MyLookReport } from './types';
 import { getUserCurrentCoordinates, fetchPrayerTimings, fetchWeatherData } from './lib/contextService';
+import { updateUserLocationInFirestore } from './lib/locationService';
 import { storageManager } from './lib/storageManager';
 
 import { Navbar } from './components/Navbar';
@@ -72,6 +73,23 @@ export default function App() {
   // Context Engine State
   const [prayerTimings, setPrayerTimings] = useState<PrayerTimings | null>(null);
   const [weather, setWeather] = useState<WeatherData | null>(null);
+
+  // Global Toast Notification State (e.g. for GPS permission alerts)
+  const [globalToast, setGlobalToast] = useState<{ message: string; type: 'warning' | 'info' | 'success' } | null>(null);
+
+  useEffect(() => {
+    const handleToastEvent = (e: Event) => {
+      const customEv = e as CustomEvent<{ message: string; type: 'warning' | 'info' | 'success' }>;
+      if (customEv.detail && customEv.detail.message) {
+        setGlobalToast(customEv.detail);
+        setTimeout(() => {
+          setGlobalToast(null);
+        }, 7000);
+      }
+    };
+    window.addEventListener('syncmate_toast', handleToastEvent);
+    return () => window.removeEventListener('syncmate_toast', handleToastEvent);
+  }, []);
 
   // Modal State
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -173,10 +191,11 @@ export default function App() {
     async function loadContext() {
       const coords = await getUserCurrentCoordinates();
       if (coords && userProfile) {
-        if (!userProfile.location || userProfile.location.city !== coords.city) {
-          const updatedProf = { ...userProfile, location: coords };
-          setUserProfile(updatedProf);
-          saveUserProfile(updatedProf).catch(console.warn);
+        const updatedProf = { ...userProfile, location: coords };
+        setUserProfile(updatedProf);
+        saveUserProfile(updatedProf).catch(console.warn);
+        if (userProfile.uid) {
+          updateUserLocationInFirestore(userProfile.uid, coords).catch(console.warn);
         }
         const pTimings = await fetchPrayerTimings(coords.latitude, coords.longitude);
         setPrayerTimings(pTimings);
@@ -206,6 +225,9 @@ export default function App() {
     const updatedProf = { ...userProfile, location: newLocation };
     setUserProfile(updatedProf);
     saveUserProfile(updatedProf).catch(console.warn);
+    if (userProfile.uid) {
+      updateUserLocationInFirestore(userProfile.uid, newLocation).catch(console.warn);
+    }
 
     // Recalculate Prayer Timings & Weather immediately for the new city!
     const pTimings = await fetchPrayerTimings(newLocation.latitude, newLocation.longitude);
@@ -398,6 +420,20 @@ export default function App() {
   return (
     <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
       
+      {/* Floating Global Toast Banner */}
+      {globalToast && (
+        <div className="fixed top-4 right-4 z-50 max-w-md p-4 rounded-2xl bg-amber-950/90 border border-amber-500/40 text-amber-200 text-xs font-bold shadow-2xl flex items-center space-x-3 backdrop-blur-md animate-fadeIn">
+          <span className="shrink-0 text-base">⚠️</span>
+          <span className="flex-1 leading-relaxed">{globalToast.message}</span>
+          <button 
+            onClick={() => setGlobalToast(null)}
+            className="text-amber-400 hover:text-white p-1 font-black text-sm shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Persistent Left Sidebar Navigation */}
       <Sidebar
         activeTab={activeTab}

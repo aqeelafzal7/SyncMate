@@ -1,4 +1,5 @@
 import { UserLocation, PrayerTimings, WeatherData } from '../types';
+import { getExactDeviceLocation } from './locationService';
 
 // Default coordinates: Mecca fallback
 const DEFAULT_LAT = 21.4225;
@@ -81,92 +82,33 @@ export async function getLocationFromIP(): Promise<UserLocation | null> {
 }
 
 /**
- * Dual-Location Engine with Aggressive 3-Second Timeout & Instant Background IP Fetching
+ * High-Accuracy GPS Location Engine with OpenStreetMap Geocoding & IP Fallback
  */
 export async function getUserCurrentCoordinates(): Promise<UserLocation> {
-  // Start background IP location fetch IMMEDIATELY
-  const ipLocationPromise = getLocationFromIP();
-
-  return new Promise((resolve) => {
-    let resolved = false;
-
-    // Helper to resolve with IP location or graceful fallback
-    const resolveWithIP = async () => {
-      if (resolved) return;
-      resolved = true;
-      const ipLoc = await ipLocationPromise;
-      if (ipLoc) {
-        resolve(ipLoc);
-      } else {
-        resolve({
-          latitude: 31.5204,
-          longitude: 74.3587,
-          city: 'Detected Location',
-          updatedAt: new Date().toISOString()
-        });
-      }
-    };
-
-    if (!('geolocation' in navigator)) {
-      resolveWithIP();
-      return;
+  try {
+    // Try exact HTML5 GPS hardware location with OpenStreetMap reverse geocoding
+    const exactLoc = await getExactDeviceLocation();
+    if (exactLoc && exactLoc.latitude && exactLoc.longitude) {
+      return exactLoc;
     }
+  } catch (err) {
+    console.warn('HTML5 GPS positioning failed or denied, using IP location fallback:', err);
+  }
 
-    // Aggressive 5-second safety timer for high-accuracy browser GPS
-    const safetyTimer = setTimeout(() => {
-      if (!resolved) {
-        console.warn('Browser GPS timed out after 5s, forcing IP-based location fallback.');
-        resolveWithIP();
-      }
-    }, 5000);
+  // IP Location Fallback
+  const ipLoc = await getLocationFromIP();
+  if (ipLoc) {
+    return ipLoc;
+  }
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        if (resolved) return;
-        clearTimeout(safetyTimer);
-
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        let cityName = `${lat.toFixed(2)}°, ${lng.toFixed(2)}°`;
-        
-        try {
-          // Reverse geocoding
-          const res = await fetch(
-            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`, 
-            { signal: AbortSignal.timeout(3000) }
-          );
-          if (res.ok) {
-            const geoData = await res.json();
-            const city = geoData.city || geoData.locality || geoData.principalSubdivision;
-            const country = geoData.countryName;
-            if (city) {
-              cityName = country ? `${city}, ${country}` : city;
-            }
-          }
-        } catch {
-          const ipLoc = await ipLocationPromise;
-          if (ipLoc?.city && !ipLoc.city.includes('Default')) {
-            cityName = ipLoc.city;
-          }
-        }
-
-        resolved = true;
-        resolve({
-          latitude: lat,
-          longitude: lng,
-          city: cityName,
-          updatedAt: new Date().toISOString()
-        });
-      },
-      (error) => {
-        if (resolved) return;
-        clearTimeout(safetyTimer);
-        console.warn('Geolocation permission denied or error:', error.message);
-        resolveWithIP();
-      },
-      { timeout: 5000, enableHighAccuracy: true }
-    );
-  });
+  // Hardcoded default fallback (Faisalabad, Pakistan)
+  return {
+    latitude: 31.4187,
+    longitude: 73.0791,
+    city: "Faisalabad, Pakistan",
+    areaLabel: "Faisalabad, Pakistan",
+    updatedAt: new Date().toISOString()
+  };
 }
 
 /**

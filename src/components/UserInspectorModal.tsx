@@ -239,7 +239,7 @@ export const UserInspectorModal: React.FC<UserInspectorModalProps> = ({
                 {hasGeo ? (
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <span className="text-xs font-mono text-emerald-400 font-bold">
-                      Lat: {lat?.toFixed(5)}, Lng: {lng?.toFixed(5)} {user.location?.city ? `(${user.location.city})` : ''}
+                      Lat: {lat?.toFixed(5)}, Lng: {lng?.toFixed(5)} {user.location?.areaLabel || user.location?.city ? `(${user.location?.areaLabel || user.location?.city})` : ''}
                     </span>
                     <a
                       href={`https://www.google.com/maps?q=${lat},${lng}`}
