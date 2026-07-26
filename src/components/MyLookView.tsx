@@ -20,7 +20,8 @@ import {
   X, 
   ChevronRight,
   Eye,
-  Award
+  Award,
+  Check
 } from 'lucide-react';
 import { MyLookReport, StyleLog, WardrobeItem, UserProfile } from '../types';
 import { uploadMyLookPhoto, addMyLookReportToFirestore, uploadToImgBB } from '../lib/firebase';
@@ -58,6 +59,18 @@ export const MyLookView: React.FC<MyLookViewProps> = ({
   const [imageSize, setImageSize] = useState<'1K' | '2K' | '4K'>('2K');
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
   const [visualError, setVisualError] = useState<string | null>(null);
+  const [copiedBarberInstructions, setCopiedBarberInstructions] = useState<boolean>(false);
+
+  const handleCopyBarberInstructions = (haircut?: string, beard?: string) => {
+    const h = haircut || 'Tailored Haircut';
+    const b = beard || 'Clean Beard Trim';
+    const text = `Hey! Please give me a ${h} with ${b}. (Analyzed by SyncMate AI)`;
+    navigator.clipboard.writeText(text);
+    setCopiedBarberInstructions(true);
+    setTimeout(() => {
+      setCopiedBarberInstructions(false);
+    }, 3000);
+  };
 
   // Progress Insight State
   const [progressInsight, setProgressInsight] = useState<string | null>(null);
@@ -736,6 +749,23 @@ NEW REPORT:
                       </p>
                     </div>
 
+                    <button
+                      onClick={() => handleCopyBarberInstructions(latestReport.suggestedHaircut, latestReport.suggestedBeard)}
+                      className="w-full py-2 px-3 rounded-xl bg-cyan-950/80 hover:bg-cyan-900/80 border border-cyan-500/30 text-cyan-300 text-xs font-extrabold flex items-center justify-center space-x-1.5 transition-all shadow-sm"
+                    >
+                      {copiedBarberInstructions ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span className="text-emerald-400">Copied barber instructions!</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>📋</span>
+                          <span>Copy Instructions for Barber</span>
+                        </>
+                      )}
+                    </button>
+
                     <div className="pt-2 border-t border-slate-800/80">
                       <span className="text-[10px] font-medium text-slate-400 block">
                         Base Selfie Image:
@@ -749,9 +779,26 @@ NEW REPORT:
                   </div>
 
                   {/* Right Generated AI Result Display */}
-                  <div className="md:col-span-2 relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 min-h-[220px] flex items-center justify-center p-3">
+                  <div className="md:col-span-2 relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 min-h-[240px] flex items-center justify-center p-3">
+                    {/* Floating Glassmorphic Subject Badge */}
+                    <div className="absolute top-3 left-3 z-20 px-3 py-1 rounded-full bg-slate-950/80 backdrop-blur-md border border-slate-700/60 text-slate-200 text-[10px] font-bold shadow-lg flex items-center space-x-1.5">
+                      <span>📸</span>
+                      <span>Scanned Subject (Live Selfie)</span>
+                    </div>
+
+                    {/* Sonar Scanning Reticle Effect during scanning / generating */}
+                    {(isGeneratingVisual || isScanning) && (
+                      <div className="absolute inset-0 pointer-events-none rounded-2xl overflow-hidden z-30">
+                        <div className="absolute top-3 left-3 w-5 h-5 border-t-2 border-l-2 border-cyan-400"></div>
+                        <div className="absolute top-3 right-3 w-5 h-5 border-t-2 border-r-2 border-cyan-400"></div>
+                        <div className="absolute bottom-3 left-3 w-5 h-5 border-b-2 border-l-2 border-cyan-400"></div>
+                        <div className="absolute bottom-3 right-3 w-5 h-5 border-b-2 border-r-2 border-cyan-400"></div>
+                        <div className="w-full h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_#22d3ee] animate-pulse absolute top-1/2 -translate-y-1/2"></div>
+                      </div>
+                    )}
+
                     {isGeneratingVisual ? (
-                      <div className="flex flex-col items-center justify-center p-8 text-center space-y-3">
+                      <div className="flex flex-col items-center justify-center p-8 text-center space-y-3 z-10 pt-10">
                         <div className="w-12 h-12 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin flex items-center justify-center">
                           <Sparkles className="w-5 h-5 text-cyan-400 animate-pulse" />
                         </div>
@@ -765,20 +812,25 @@ NEW REPORT:
                         </div>
                       </div>
                     ) : generatedVisualUrl ? (
-                      <div className="relative w-full h-full group">
+                      <div className="relative w-full h-full group flex items-center justify-center pt-8 pb-10">
                         <img
                           src={generatedVisualUrl}
                           alt="Nano Banana AI Barber Visual"
                           className="w-full max-h-80 object-contain rounded-xl border border-slate-800 shadow-xl"
                           referrerPolicy="no-referrer"
                         />
-                        <div className="absolute bottom-3 right-3 px-3 py-1 rounded-lg bg-slate-950/90 backdrop-blur-md border border-cyan-500/40 text-cyan-300 font-mono text-[10px] font-bold shadow-lg flex items-center space-x-1">
-                          <Sparkles className="w-3 h-3 text-amber-400" />
-                          <span>Nano Banana AI Preview ({imageSize})</span>
+                        {/* Glowing Gradient AI Blueprint Banner */}
+                        <div className="absolute bottom-3 left-3 right-3 z-20 px-3.5 py-2 rounded-xl bg-gradient-to-r from-slate-950/90 via-slate-900/90 to-cyan-950/90 backdrop-blur-md border border-cyan-500/40 text-cyan-300 text-xs font-bold shadow-xl flex items-center justify-between gap-2">
+                          <span className="truncate">
+                            ✨ AI Blueprint: {latestReport.suggestedHaircut} + {latestReport.suggestedBeard}
+                          </span>
+                          <span className="shrink-0 text-[10px] font-mono font-extrabold text-cyan-400 bg-cyan-950/80 px-2 py-0.5 rounded-md border border-cyan-500/30">
+                            Nano Banana ({imageSize})
+                          </span>
                         </div>
                       </div>
                     ) : (
-                      <div className="text-center p-6 space-y-2">
+                      <div className="text-center p-6 space-y-3 z-10 pt-10">
                         <Scissors className="w-8 h-8 text-cyan-500 mx-auto opacity-80 animate-pulse" />
                         <p className="text-xs font-bold text-slate-300">
                           Ready to generate your identity-preserving haircut edit
