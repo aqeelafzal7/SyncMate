@@ -133,6 +133,7 @@ export async function callGeminiWithFallback(
   }
 
   let lastError: Error | null = null;
+  let hasEncounteredRateLimit = false;
 
   for (const model of GEMINI_MODELS) {
     try {
@@ -154,19 +155,19 @@ export async function callGeminiWithFallback(
       const errorData = await response.json().catch(() => ({}));
       const rawMsg = JSON.stringify(errorData);
 
-      if (response.status === 400) {
+      if (response.status === 429) {
+        hasEncounteredRateLimit = true;
+        console.warn(`Model ${model} rate limited (HTTP 429). Waiting 1.5s before fallback...`);
+        await new Promise((res) => setTimeout(res, 1500));
+      } else if (response.status === 400) {
         throw new Error(
           'Invalid image payload structure (HTTP 400). Please ensure your selfie/image is a valid JPEG/PNG.'
         );
-      }
-
-      if (response.status === 401) {
+      } else if (response.status === 401) {
         throw new Error(
           'Invalid API Key (HTTP 401). Please verify your Google Gemini API key.'
         );
-      }
-
-      if (
+      } else if (
         response.status === 403 ||
         rawMsg.includes('API_KEY_HTTP_REFERRER_BLOCKED') ||
         rawMsg.includes('PERMISSION_DENIED')
@@ -191,6 +192,12 @@ export async function callGeminiWithFallback(
       lastError = err;
       console.warn(`Model ${model} failed with error, switching to next fallback model...`, err);
     }
+  }
+
+  if (hasEncounteredRateLimit) {
+    throw new Error(
+      '⏳ Google AI Rate Limit Reached: Free tier allows 15 requests/min. Please wait 30–60 seconds before trying again.'
+    );
   }
 
   throw new Error(

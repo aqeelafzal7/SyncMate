@@ -57,6 +57,7 @@ export const MyLookView: React.FC<MyLookViewProps> = ({
   const [isGeneratingVisual, setIsGeneratingVisual] = useState<boolean>(false);
   const [imageSize, setImageSize] = useState<'1K' | '2K' | '4K'>('2K');
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
+  const [visualError, setVisualError] = useState<string | null>(null);
 
   // Progress Insight State
   const [progressInsight, setProgressInsight] = useState<string | null>(null);
@@ -245,6 +246,18 @@ Ensure output is valid JSON.`;
     }
   };
 
+  // Restore cached visual from localStorage on report change
+  useEffect(() => {
+    const report = myLookReports[0];
+    if (report) {
+      const cacheKey = `my_look_visual_${report.id || report.imageUrl}`;
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        setGeneratedVisualUrl(cached);
+      }
+    }
+  }, [myLookReports[0]?.id, myLookReports[0]?.imageUrl]);
+
   // Generate Barber & Stylist Visualizer via Nano Banana
   const handleGenerateBarberVisual = async (imageUrl?: string, haircut?: string, beard?: string, customSize?: '1K' | '2K' | '4K') => {
     const report = myLookReports[0];
@@ -252,9 +265,10 @@ Ensure output is valid JSON.`;
     const targetHaircut = haircut || report?.suggestedHaircut || 'Tailored Executive Contour';
     const targetBeard = beard || report?.suggestedBeard || 'Clean Boxed Beard';
 
-    if (!targetImage) return;
+    if (!targetImage || isGeneratingVisual) return;
 
     setIsGeneratingVisual(true);
+    setVisualError(null);
     try {
       const apiKey = await getDecryptedApiKey();
       if (!apiKey) {
@@ -273,6 +287,14 @@ Ensure output is valid JSON.`;
 
       if (responseText) {
         setGeneratedVisualUrl(targetImage);
+        if (report) {
+          const cacheKey = `my_look_visual_${report.id || report.imageUrl}`;
+          try {
+            localStorage.setItem(cacheKey, targetImage);
+          } catch (e) {
+            // ignore storage errors
+          }
+        }
       }
     } catch (err: any) {
       console.error('Failed to generate Nano Banana visual:', err);
@@ -284,6 +306,8 @@ Ensure output is valid JSON.`;
         errMsg.includes('connect your Google Gemini API key')
       ) {
         setIsApiKeyModalOpen(true);
+      } else {
+        setVisualError(errMsg);
       }
       setGeneratedVisualUrl(targetImage);
     } finally {
@@ -301,6 +325,13 @@ Ensure output is valid JSON.`;
 
         if (attemptedCompareKeyRef.current === pairKey || comparingProgress) return;
         attemptedCompareKeyRef.current = pairKey;
+
+        // Check localStorage cache
+        const cachedInsight = localStorage.getItem(`my_look_insight_${pairKey}`);
+        if (cachedInsight) {
+          setProgressInsight(cachedInsight);
+          return;
+        }
 
         setComparingProgress(true);
         try {
@@ -322,6 +353,11 @@ NEW REPORT:
           const summaryText = await callGeminiWithFallback(prompt);
           if (summaryText) {
             setProgressInsight(summaryText);
+            try {
+              localStorage.setItem(`my_look_insight_${pairKey}`, summaryText);
+            } catch (e) {
+              // ignore storage errors
+            }
           }
         } catch (err) {
           console.warn('Comparison endpoint error:', err);
@@ -602,6 +638,21 @@ NEW REPORT:
 
               {/* NANO BANANA BARBER & STYLIST VISUALIZER */}
               <div className="p-6 rounded-3xl bg-slate-950 text-white border border-slate-800 space-y-4 shadow-2xl">
+                {visualError && (
+                  <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold flex items-center justify-between gap-2">
+                    <div className="flex items-center space-x-2">
+                      <span>⚠️</span>
+                      <span>{visualError}</span>
+                    </div>
+                    <button
+                      onClick={() => setVisualError(null)}
+                      className="text-amber-400 hover:text-amber-300 font-bold p-1 rounded"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
                   <div className="flex items-center space-x-2">
                     <Scissors className="w-5 h-5 text-cyan-400" />
@@ -624,6 +675,7 @@ NEW REPORT:
                       {(['1K', '2K', '4K'] as const).map((s) => (
                         <button
                           key={s}
+                          disabled={isGeneratingVisual || isScanning}
                           onClick={() => {
                             setImageSize(s);
                             handleGenerateBarberVisual(latestReport.imageUrl, latestReport.suggestedHaircut, latestReport.suggestedBeard, s);
@@ -632,7 +684,7 @@ NEW REPORT:
                             imageSize === s
                               ? 'bg-cyan-500 text-slate-950 font-black shadow-sm'
                               : 'text-slate-400 hover:text-white'
-                          }`}
+                          } disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
                           {s}
                         </button>
@@ -641,8 +693,8 @@ NEW REPORT:
 
                     <button
                       onClick={() => handleGenerateBarberVisual(latestReport.imageUrl, latestReport.suggestedHaircut, latestReport.suggestedBeard)}
-                      disabled={isGeneratingVisual}
-                      className="px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs shadow-md flex items-center space-x-1.5 transition-all disabled:opacity-50"
+                      disabled={isGeneratingVisual || isScanning}
+                      className="px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs shadow-md flex items-center space-x-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isGeneratingVisual ? (
                         <>
@@ -733,7 +785,8 @@ NEW REPORT:
                         </p>
                         <button
                           onClick={() => handleGenerateBarberVisual(latestReport.imageUrl, latestReport.suggestedHaircut, latestReport.suggestedBeard)}
-                          className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-extrabold shadow-md inline-flex items-center space-x-1.5"
+                          disabled={isGeneratingVisual || isScanning}
+                          className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-extrabold shadow-md inline-flex items-center space-x-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                           <span>Generate Custom Nano Banana Visual</span>
