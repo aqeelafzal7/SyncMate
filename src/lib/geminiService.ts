@@ -34,24 +34,23 @@ export async function callGeminiWithFallback(
   const parts: any[] = [];
 
   if (options?.imageBase64) {
+    let mimeType = options?.mimeType || 'image/jpeg';
     let cleanBase64 = options.imageBase64;
-    let detectedMime = options.mimeType || 'image/jpeg';
 
-    if (cleanBase64.includes(';base64,')) {
-      const split = cleanBase64.split(';base64,');
-      if (split[0].includes('image/')) {
-        detectedMime = split[0].replace('data:', '');
+    if (cleanBase64.startsWith('data:')) {
+      const mimeMatch = cleanBase64.match(/^data:(image\/[a-zA-Z0-9\+\-\.]+);base64,/);
+      if (mimeMatch) {
+        mimeType = mimeMatch[1];
       }
-      cleanBase64 = split[1];
-    } else {
-      cleanBase64 = cleanBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
+      cleanBase64 = cleanBase64.replace(/^data:image\/[a-zA-Z0-9\+\-\.]+;base64,/, '');
     }
 
-    cleanBase64 = cleanBase64.trim();
+    // Remove any whitespace, newlines, or carriage returns
+    cleanBase64 = cleanBase64.replace(/\s/g, '').trim();
 
     parts.push({
       inlineData: {
-        mimeType: detectedMime,
+        mimeType: mimeType,
         data: cleanBase64
       }
     });
