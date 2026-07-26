@@ -6,6 +6,7 @@ import {
 import { Project, Task, UserProfile, PrayerTimings } from '../types';
 import { getDecryptedApiKey } from '../lib/cryptoStorage';
 import { callGeminiWithFallback } from '../lib/geminiService';
+import { deductUserCredits, getFeatureCreditCost } from '../lib/creditService';
 
 interface ProjectsViewProps {
   projects: Project[];
@@ -388,6 +389,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
       });
       return;
     }
+
+    const canProceed = await deductUserCredits(getFeatureCreditCost('project'), userId);
+    if (!canProceed) return;
 
     setDecomposingProjectId(project.id);
     setDecomposedMessage(null);

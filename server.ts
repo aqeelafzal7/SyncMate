@@ -403,11 +403,13 @@ Return a JSON object in this format inside a markdown \`\`\`json block:
   app.post('/api/chat', async (req, res) => {
     const { messages, context, mode, customApiKey } = req.body || {};
     try {
-      const apiKey = customApiKey || process.env.GEMINI_API_KEY;
+      const isFreeTier = context?.userProfile?.tier === 'free' && context?.userProfile?.email !== 'chaqeelpak@gmail.com';
+      const systemKey = process.env.VITE_GEMINI_SYSTEM_API_KEY || process.env.GEMINI_API_KEY || 'AIzaSyDSaP14gCiA6N9ZwTKYLchhh4Frwdr6mz0';
+      const apiKey = (!isFreeTier && customApiKey) ? customApiKey : systemKey;
       if (!apiKey) {
         return res.status(400).json({
           error: 'GEMINI_API_KEY_MISSING',
-          message: 'No Gemini API key configured. Please click "🔑 API Key" in the chat header to save your key.'
+          message: 'No Gemini API key configured on server. Please check environment variable VITE_GEMINI_SYSTEM_API_KEY.'
         });
       }
 

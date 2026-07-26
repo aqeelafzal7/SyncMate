@@ -19,6 +19,7 @@ import {
 import { ChatMessage, UserProfile, Task, PrayerTimings, WeatherData } from '../types';
 import { speakResponse, stopSpeech } from '../lib/audioService';
 import { encryptAndSaveApiKey, getDecryptedApiKey, removeSavedApiKey } from '../lib/cryptoStorage';
+import { saveUserProfile } from '../lib/firebase';
 
 interface FloatingAssistantProps {
   isOpen: boolean;
@@ -189,6 +190,29 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setInput('');
+
+    const isFreeTier = userProfile.tier === 'free' && userProfile.email !== 'chaqeelpak@gmail.com';
+    const currentChatCount = userProfile.chatMessageCount || 0;
+
+    if (isFreeTier && currentChatCount >= 15) {
+      const limitMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: "⚡ **Free Tier Daily Chat Limit Reached (15/15 messages).** Upgrade to Spark Plan for unlimited chat with your AI Assistant!",
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages([...newMessages, limitMsg]);
+      setLoading(false);
+      setIsGenerating(false);
+      isFetchingRef.current = false;
+      return;
+    }
+
+    if (isFreeTier) {
+      const newCount = currentChatCount + 1;
+      const updatedProf = { ...userProfile, chatMessageCount: newCount };
+      saveUserProfile(updatedProf).catch(console.warn);
+    }
 
     try {
       const activeApiKey = customApiKey || (await getDecryptedApiKey()) || undefined;
@@ -408,16 +432,20 @@ ${JSON.stringify({ userProfile, tasks: tasks.map(t => ({ id: t.id, title: t.titl
     } catch (err: any) {
       console.error('Floating assistant error:', err);
       const errMsg = err.message || 'Error communicating with Gemini AI.';
+      const isFreeUser = userProfile.tier === 'free' && userProfile.email !== 'chaqeelpak@gmail.com';
+      const helpNotice = isFreeUser
+        ? 'Please try again in a few moments.'
+        : 'If you haven\'t saved your Gemini API Key, please click the **🔑 API Key** button in the header above to enter your key.';
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `⚠️ **SyncMate AI Notice:** ${errMsg}\n\nIf you haven't saved your Gemini API Key, please click the **🔑 API Key** button in the header above to enter your key.`,
+        content: `⚠️ **SyncMate AI Notice:** ${errMsg}\n\n${helpNotice}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages([...newMessages, aiMsg]);
 
       if (ttsEnabled) {
-        speakResponse('There was an issue processing your request. Please check your Gemini API key in the header.');
+        speakResponse('There was an issue processing your request. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -549,19 +577,21 @@ Once you confirm, I will place it in your schedule with a proactive prep tip!`,
         </div>
 
         <div className="flex items-center space-x-1.5">
-          {/* API Key Manager Button */}
-          <button
-            onClick={() => setShowApiKeyModal(!showApiKeyModal)}
-            className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all flex items-center space-x-1 ${
-              customApiKey
-                ? 'bg-emerald-500/30 text-emerald-200 border-emerald-400/50'
-                : 'bg-amber-500/20 text-amber-200 border-amber-400/40 hover:bg-amber-500/30'
-            }`}
-            title="Configure Gemini API Key"
-          >
-            <Key className="w-3 h-3" />
-            <span>{customApiKey ? 'Key Saved' : '🔑 API Key'}</span>
-          </button>
+          {/* API Key Manager Button (Paid / Admin Users Only) */}
+          {userProfile && (userProfile.tier !== 'free' || userProfile.email === 'chaqeelpak@gmail.com') && (
+            <button
+              onClick={() => setShowApiKeyModal(!showApiKeyModal)}
+              className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all flex items-center space-x-1 ${
+                customApiKey
+                  ? 'bg-emerald-500/30 text-emerald-200 border-emerald-400/50'
+                  : 'bg-amber-500/20 text-amber-200 border-amber-400/40 hover:bg-amber-500/30'
+              }`}
+              title="Configure Gemini API Key"
+            >
+              <Key className="w-3 h-3" />
+              <span>{customApiKey ? 'Key Saved' : '🔑 API Key'}</span>
+            </button>
+          )}
 
           {/* TTS Toggle */}
           <button

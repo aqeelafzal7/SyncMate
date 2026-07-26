@@ -87,8 +87,18 @@ export default function App() {
         }, 7000);
       }
     };
+    const handleProfileUpdate = (e: Event) => {
+      const customEv = e as CustomEvent<any>;
+      if (customEv.detail) {
+        setUserProfile((prev) => (prev ? { ...prev, ...customEv.detail } : customEv.detail));
+      }
+    };
     window.addEventListener('syncmate_toast', handleToastEvent);
-    return () => window.removeEventListener('syncmate_toast', handleToastEvent);
+    window.addEventListener('syncmate_profile_updated', handleProfileUpdate);
+    return () => {
+      window.removeEventListener('syncmate_toast', handleToastEvent);
+      window.removeEventListener('syncmate_profile_updated', handleProfileUpdate);
+    };
   }, []);
 
   // Modal State

@@ -105,40 +105,51 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </h3>
         </div>
 
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          Provide your custom Gemini API key to override system defaults for unrestricted rate limits on AI Chat, Vision Auto-Tagging, and AI Stylist.
-        </p>
+        {userProfile && (userProfile.tier !== 'free' || userProfile.email === 'chaqeelpak@gmail.com') ? (
+          <>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Provide your custom Gemini API key to override system defaults for unrestricted rate limits on AI Chat, Vision Auto-Tagging, and AI Stylist.
+            </p>
 
-        <form onSubmit={handleSaveApiKey} className="space-y-3">
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="AIzaSy..."
-            className="w-full py-3 px-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
-          />
+            <form onSubmit={handleSaveApiKey} className="space-y-3">
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="AIzaSy..."
+                className="w-full py-3 px-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+              />
 
-          <div className="flex items-center justify-between">
-            {keySaved ? (
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center space-x-1">
-                <Check className="w-4 h-4" />
-                <span>API Key saved securely to localStorage!</span>
-              </span>
-            ) : (
-              <span className="text-[10px] text-slate-400 italic">
-                Saved locally on your device. Never shared.
-              </span>
-            )}
+              <div className="flex items-center justify-between">
+                {keySaved ? (
+                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center space-x-1">
+                    <Check className="w-4 h-4" />
+                    <span>API Key saved securely to localStorage!</span>
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-slate-400 italic">
+                    Saved locally on your device. Never shared.
+                  </span>
+                )}
 
-            <button
-              type="submit"
-              className="px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-md flex items-center space-x-1.5"
-            >
-              <Save className="w-4 h-4" />
-              <span>Save API Key</span>
-            </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-md flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Save API Key</span>
+                </button>
+              </div>
+            </form>
+          </>
+        ) : (
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-200 text-xs font-semibold flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center space-x-2">
+              <span className="text-lg">⚡</span>
+              <span>System AI Engine Active. Upgrade to Spark Plan to connect your custom Google Gemini API Key.</span>
+            </div>
           </div>
-        </form>
+        )}
       </div>
 
       {/* EXECUTIVE PROFILE & LOCATION CARD */}

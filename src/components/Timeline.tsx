@@ -31,6 +31,7 @@ import { getFormattedHijriDate } from '../lib/contextService';
 import { IslamicInsightModal } from './IslamicInsightModal';
 import { BirthdayCard } from './BirthdayCard';
 import { checkIsBirthday, getMsUntilMidnight } from '../lib/birthdayUtils';
+import { getTierDefaultCredits } from '../lib/subscriptionService';
 
 interface TimelineProps {
   userProfile: UserProfile;
@@ -362,6 +363,24 @@ export const Timeline: React.FC<TimelineProps> = ({
 
           {/* Quick Context Chips */}
           <div className="flex flex-wrap items-center gap-3 shrink-0">
+            
+            {/* Glowing Credit Counter Widget */}
+            <div className={`backdrop-blur-md px-3.5 py-2 rounded-2xl border text-xs flex items-center space-x-2.5 transition-all shadow-xs ${
+              (userProfile?.dailyCredits ?? 6) === 0 
+                ? 'bg-red-500/20 text-red-300 border-red-500/40 animate-pulse'
+                : 'bg-white/10 hover:bg-white/20 text-white border-white/10'
+            }`}>
+              <span className="text-base shrink-0">⚡</span>
+              <div>
+                <span className="block text-[10px] text-amber-300 font-extrabold uppercase tracking-wider">
+                  Daily Credits: {userProfile?.dailyCredits ?? 6} / {getTierDefaultCredits(userProfile?.tier, userProfile?.dailyCredits)}
+                </span>
+                <span className="text-[10px] text-indigo-200 block font-semibold">
+                  Resets at 00:00 Midnight
+                </span>
+              </div>
+            </div>
+
             {/* Dual Calendar Pill: Gregorian + Hijri */}
             <div className="bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-white/10 text-xs flex items-center space-x-2.5">
               <CalendarIcon className="w-4 h-4 text-purple-300 shrink-0" />

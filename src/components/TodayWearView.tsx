@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getDecryptedApiKey } from '../lib/cryptoStorage';
 import { callGeminiWithFallback, fetchImgbbAsBase64 } from '../lib/geminiService';
+import { deductUserCredits, getFeatureCreditCost } from '../lib/creditService';
 import { AddWardrobeItemModal } from './AddWardrobeItemModal';
 import { ApiKeyModal } from './ApiKeyModal';
 import { 
@@ -189,6 +190,9 @@ export const TodayWearView: React.FC<TodayWearViewProps> = ({
         // ignore cache parse error
       }
     }
+
+    const canProceed = await deductUserCredits(getFeatureCreditCost('today_wear'), userProfile?.uid);
+    if (!canProceed) return;
 
     isFetchingRef.current = true;
     setGenerating(true);

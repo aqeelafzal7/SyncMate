@@ -20,10 +20,13 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
+  userProfile,
   onToggleMobileSidebar,
 }) => {
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
+
+  const isEligibleForApiKey = userProfile && (userProfile.tier !== 'free' || userProfile.email === 'chaqeelpak@gmail.com');
 
   const checkKeyStatus = useCallback(() => {
     getDecryptedApiKey().then((key) => {
@@ -68,33 +71,33 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
 
-          {/* Right Side: API Key Badge */}
+          {/* Right Side: API Key Badge (Gated for Paid / Admin Users Only) */}
           <div className="flex items-center space-x-2 sm:space-x-3">
-            
-            {/* API Key Status Indicator Badge */}
-            <button
-              onClick={() => setIsApiKeyModalOpen(true)}
-              title={hasApiKey ? 'Gemini API Key Connected (Click to Manage)' : 'Connect Gemini API Key'}
-              className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs border cursor-pointer ${
-                hasApiKey
-                  ? 'bg-emerald-50 hover:bg-emerald-100/80 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/50 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
-                  : 'bg-amber-50 hover:bg-amber-100/80 dark:bg-amber-950/50 dark:hover:bg-amber-900/50 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 animate-pulse'
-              }`}
-            >
-              {hasApiKey ? (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                  <span className="hidden xs:inline">🔑 AI Engine Connected</span>
-                  <span className="xs:hidden">🔑 Connected</span>
-                </>
-              ) : (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
-                  <span className="hidden xs:inline">⚠️ Connect AI Key</span>
-                  <span className="xs:hidden">⚠️ Connect Key</span>
-                </>
-              )}
-            </button>
+            {isEligibleForApiKey && (
+              <button
+                onClick={() => setIsApiKeyModalOpen(true)}
+                title={hasApiKey ? 'Gemini API Key Connected (Click to Manage)' : 'Connect Gemini API Key'}
+                className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs border cursor-pointer ${
+                  hasApiKey
+                    ? 'bg-emerald-50 hover:bg-emerald-100/80 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/50 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-amber-50 hover:bg-amber-100/80 dark:bg-amber-950/50 dark:hover:bg-amber-900/50 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 animate-pulse'
+                }`}
+              >
+                {hasApiKey ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                    <span className="hidden xs:inline">🔑 AI Engine Connected</span>
+                    <span className="xs:hidden">🔑 Connected</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
+                    <span className="hidden xs:inline">⚠️ Connect AI Key</span>
+                    <span className="xs:hidden">⚠️ Connect Key</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
 
         </div>

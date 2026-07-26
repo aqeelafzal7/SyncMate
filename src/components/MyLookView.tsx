@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getDecryptedApiKey } from '../lib/cryptoStorage';
 import { callGeminiWithFallback, fetchImgbbAsBase64 } from '../lib/geminiService';
+import { deductUserCredits, getFeatureCreditCost } from '../lib/creditService';
 import { ApiKeyModal } from './ApiKeyModal';
 import { 
   Sparkles, 
@@ -135,6 +136,10 @@ export const MyLookView: React.FC<MyLookViewProps> = ({
   // Run Biometrics Scan with Direct Gemini Vision API call
   const handleAnalyzeBiometrics = async () => {
     if (!selectedImage || !userProfile?.uid) return;
+
+    const canProceed = await deductUserCredits(getFeatureCreditCost('my_look'), userProfile.uid);
+    if (!canProceed) return;
+
     setIsScanning(true);
     setScanStep('Analyzing facial biometrics & uploading photo...');
 

@@ -13,6 +13,38 @@ export interface GeminiOptions {
   systemInstruction?: string;
   imageBase64?: string;
   mimeType?: string;
+  customApiKey?: string;
+  userProfile?: { tier?: string; email?: string } | null;
+}
+
+/**
+ * Resolves effective Gemini API Key with Cloudflare System API Key fallback
+ */
+export async function getEffectiveApiKey(
+  optionsApiKey?: string,
+  userProfile?: { tier?: string; email?: string } | null
+): Promise<string> {
+  const customKey = optionsApiKey || (await getDecryptedApiKey());
+  const systemApiKey =
+    (import.meta.env.VITE_GEMINI_SYSTEM_API_KEY as string) ||
+    (import.meta.env.VITE_GEMINI_API_KEY as string) ||
+    DEFAULT_FALLBACK_KEY;
+
+  const isEligibleForCustomKey = userProfile
+    ? userProfile.tier !== 'free' || userProfile.email === 'chaqeelpak@gmail.com'
+    : true;
+
+  if (customKey && isEligibleForCustomKey) {
+    return customKey;
+  }
+
+  if (systemApiKey) {
+    return systemApiKey;
+  }
+
+  throw new Error(
+    '⚡ System AI Engine Key missing. Please check system environment configuration (VITE_GEMINI_SYSTEM_API_KEY) or upgrade to a paid tier.'
+  );
 }
 
 /**
@@ -77,11 +109,10 @@ export async function callGeminiWithFallback(
   prompt: string,
   options?: GeminiOptions
 ): Promise<string> {
-  const customKey = await getDecryptedApiKey();
-  const apiKey = customKey || DEFAULT_FALLBACK_KEY;
+  const apiKey = await getEffectiveApiKey(options?.customApiKey, options?.userProfile);
 
   if (!apiKey) {
-    throw new Error('No Gemini API key found. Please connect your API key in the top header.');
+    throw new Error('⚡ System AI Engine Key missing. Please check system environment config.');
   }
 
   // Build parts array
