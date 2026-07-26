@@ -268,7 +268,13 @@ Ensure output is valid JSON.`;
       }
     } catch (err: any) {
       console.error('Failed to generate Nano Banana visual:', err);
-      if (err?.message?.includes('API key') || err?.message?.includes('API Key Blocked') || err?.message?.includes('connect your Google Gemini API key')) {
+      const errMsg = err?.message || '';
+      if (
+        errMsg.includes('401') ||
+        errMsg.includes('403') ||
+        errMsg.includes('API Key Blocked') ||
+        errMsg.includes('connect your Google Gemini API key')
+      ) {
         setIsApiKeyModalOpen(true);
       }
       setGeneratedVisualUrl(targetImage);

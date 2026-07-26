@@ -384,7 +384,13 @@ Only use item IDs that actually exist in the AVAILABLE CLEAN WARDROBE ITEMS list
       setTryOnResultUrl(mainItemImage);
     } catch (err: any) {
       console.error('Virtual try-on error:', err);
-      if (err?.message?.includes('API key') || err?.message?.includes('API Key Blocked') || err?.message?.includes('connect your Google Gemini API key')) {
+      const errMsg = err?.message || '';
+      if (
+        errMsg.includes('401') ||
+        errMsg.includes('403') ||
+        errMsg.includes('API Key Blocked') ||
+        errMsg.includes('connect your Google Gemini API key')
+      ) {
         setIsApiKeyModalOpen(true);
       }
       const outfitItems = selectedOutfitForTryOn.itemIds

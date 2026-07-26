@@ -43,7 +43,11 @@ export async function callGeminiWithFallback(
         detectedMime = split[0].replace('data:', '');
       }
       cleanBase64 = split[1];
+    } else {
+      cleanBase64 = cleanBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
     }
+
+    cleanBase64 = cleanBase64.trim();
 
     parts.push({
       inlineData: {
@@ -94,6 +98,18 @@ export async function callGeminiWithFallback(
       const errorData = await response.json().catch(() => ({}));
       const rawMsg = JSON.stringify(errorData);
 
+      if (response.status === 400) {
+        throw new Error(
+          'Invalid image/request format (HTTP 400). Please ensure your selfie/image is a valid JPEG/PNG.'
+        );
+      }
+
+      if (response.status === 401) {
+        throw new Error(
+          'Invalid API Key (HTTP 401). Please verify your Google Gemini API key.'
+        );
+      }
+
       if (
         response.status === 403 ||
         rawMsg.includes('API_KEY_HTTP_REFERRER_BLOCKED') ||
@@ -106,7 +122,13 @@ export async function callGeminiWithFallback(
 
       console.warn(`Model ${model} failed (HTTP ${response.status}), switching to next fallback model...`);
     } catch (err: any) {
-      if (err.message && err.message.includes('API Key Blocked: Your Google API key is restricted by HTTP Referrer')) {
+      const msg = err.message || '';
+      if (
+        msg.includes('Invalid image/request format') ||
+        msg.includes('Invalid API Key') ||
+        msg.includes('API Key Blocked') ||
+        msg.includes('restricted by HTTP Referrer')
+      ) {
         throw err;
       }
       lastError = err;
