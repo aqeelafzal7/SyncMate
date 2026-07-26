@@ -30,6 +30,9 @@ import { TodayWearView } from './components/TodayWearView';
 import { MyLookView } from './components/MyLookView';
 import { HabitsView } from './components/HabitsView';
 import { SettingsView } from './components/SettingsView';
+import { BuySubscriptionView } from './components/BuySubscriptionView';
+import { AdminSubscriptionQueue } from './components/AdminSubscriptionQueue';
+import { AdminLayout } from './components/AdminLayout';
 import { FloatingAssistant } from './components/FloatingAssistant';
 import { TaskModal } from './components/TaskModal';
 import { ProjectsView } from './components/ProjectsView';
@@ -37,6 +40,7 @@ import { CitySearchModal } from './components/CitySearchModal';
 import { DobCollectionModal } from './components/DobCollectionModal';
 import { BirthdayBalloonsOverlay } from './components/BirthdayBalloonsOverlay';
 import { checkIsBirthday } from './lib/birthdayUtils';
+import { processUserSubscriptionLifecycle } from './lib/subscriptionService';
 
 import { Calendar, Target, Bot, Sparkles, Loader2, Timer, MapPin, Sun } from 'lucide-react';
 
@@ -109,8 +113,11 @@ export default function App() {
         const profile = await getUserProfile(user.uid);
         if (profile) {
           const activeMood = profile.activeMood || 'neutral';
-          const profWithMood = { ...profile, activeMood };
-          setUserProfile(profWithMood);
+          let profProcessed = processUserSubscriptionLifecycle({ ...profile, activeMood });
+          if (profProcessed.updatedAt !== profile.updatedAt) {
+            saveUserProfile(profProcessed).catch(console.warn);
+          }
+          setUserProfile(profProcessed);
           localStorage.setItem('syncmate_current_mood', activeMood);
           setShowOnboarding(!profile.onboarded);
         } else {
@@ -183,6 +190,16 @@ export default function App() {
       loadContext();
     }
   }, [userProfile?.uid, userProfile?.religion]);
+
+  // Security Guard for Admin Routes
+  const isAdminMode = activeTab.startsWith('admin');
+  const isAdmin = userProfile?.email === 'chaqeelpak@gmail.com';
+
+  useEffect(() => {
+    if (isAdminMode && !isAdmin) {
+      setActiveTab('dashboard');
+    }
+  }, [isAdminMode, isAdmin]);
 
   const handleUpdateLocation = async (newLocation: UserLocation) => {
     if (!userProfile) return;
@@ -360,6 +377,23 @@ export default function App() {
     );
   }
 
+  // Dedicated Admin Workspace Layout
+  if (isAdminMode && isAdmin) {
+    return (
+      <AdminLayout
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        userProfile={userProfile}
+        onRefreshStats={async () => {
+          if (userProfile?.uid) {
+            const refreshed = await getUserProfile(userProfile.uid);
+            if (refreshed) setUserProfile(refreshed);
+          }
+        }}
+      />
+    );
+  }
+
   // Main Executive Lifestyle OS Layout
   return (
     <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
@@ -475,6 +509,26 @@ export default function App() {
           {/* Habits View */}
           {activeTab === 'habits' && (
             <HabitsView userProfile={userProfile} />
+          )}
+
+          {/* Buy Subscription View */}
+          {activeTab === 'buy_subscription' && (
+            <BuySubscriptionView
+              userProfile={userProfile}
+              onGoToSettings={() => setActiveTab('settings')}
+            />
+          )}
+
+          {/* Admin Queue View */}
+          {activeTab === 'admin_queue' && (
+            <AdminSubscriptionQueue
+              onRefreshStats={async () => {
+                if (userProfile?.uid) {
+                  const refreshed = await getUserProfile(userProfile.uid);
+                  if (refreshed) setUserProfile(refreshed);
+                }
+              }}
+            />
           )}
 
           {/* Settings View */}

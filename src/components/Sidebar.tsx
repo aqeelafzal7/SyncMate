@@ -14,7 +14,9 @@ import {
   X,
   Sun,
   Moon,
-  Monitor
+  Monitor,
+  Zap,
+  ShieldCheck
 } from 'lucide-react';
 import { ActiveTab, UserProfile, ThemeMode } from '../types';
 
@@ -49,6 +51,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   theme = 'system',
   onThemeChange,
 }) => {
+  const isAdmin = userProfile?.email === 'chaqeelpak@gmail.com';
+
   const navItems = [
     { id: 'dashboard' as ActiveTab, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'daily_strategy' as ActiveTab, label: 'Daily Strategy', icon: Target, badge: '4 AM' },
@@ -56,11 +60,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'my_look' as ActiveTab, label: 'My Look', icon: Sparkles },
     { id: 'projects' as ActiveTab, label: 'Projects', icon: UserCheck },
     { id: 'habits' as ActiveTab, label: 'Habits', icon: CheckCircle2 },
+    { id: 'buy_subscription' as ActiveTab, label: '⭐ Buy Subscription', icon: Zap, badge: 'Pro', isGlowing: true },
+    ...(isAdmin ? [{ id: 'admin_users' as ActiveTab, label: '🛡️ Admin Console', icon: ShieldCheck, badge: 'Admin' }] : []),
     { id: 'settings' as ActiveTab, label: 'Settings', icon: Settings },
   ];
 
   // Reserve bottom floating nav ONLY for core primary tabs (Dashboard, Today Wear, My Look, Habits)
-  const primaryBottomNavItems = navItems.filter((item) => item.id !== 'projects' && item.id !== 'settings' && item.id !== 'daily_strategy');
+  const primaryBottomNavItems = navItems.filter((item) => item.id !== 'projects' && item.id !== 'settings' && item.id !== 'daily_strategy' && item.id !== 'buy_subscription' && !item.id.startsWith('admin'));
 
   const handleSelectTab = (tab: ActiveTab) => {
     onSelectTab(tab);
@@ -162,18 +168,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   isCollapsed && !isMobileSidebarOpen ? 'justify-center' : 'justify-between'
                 } ${
                   isActive
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-600/30'
+                    : item.isGlowing
+                    ? 'bg-gradient-to-r from-indigo-950/60 to-purple-950/60 text-indigo-300 hover:text-white border border-indigo-500/30 shadow-sm hover:border-indigo-400/50'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
                 }`}
                 title={item.label}
               >
                 <div className="flex items-center space-x-3">
-                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : item.isGlowing ? 'text-indigo-400 animate-pulse' : 'text-slate-400'}`} />
                   {(!isCollapsed || isMobileSidebarOpen) && <span>{item.label}</span>}
                 </div>
 
                 {(!isCollapsed || isMobileSidebarOpen) && item.badge && (
-                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-indigo-500/30 text-indigo-300 border border-indigo-400/30">
+                  <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-black border ${
+                    item.badge === 'Pro'
+                      ? 'bg-gradient-to-r from-indigo-500/40 to-purple-500/40 text-purple-200 border-purple-400/50 shadow-sm'
+                      : 'bg-indigo-500/30 text-indigo-300 border-indigo-400/30'
+                  }`}>
                     {item.badge}
                   </span>
                 )}

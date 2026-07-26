@@ -24,7 +24,7 @@ import {
   deleteDoc,
   serverTimestamp
 } from 'firebase/firestore';
-import { UserProfile, Task, Project, WardrobeItem, StyleLog, MyLookReport } from '../types';
+import { UserProfile, Task, Project, WardrobeItem, StyleLog, MyLookReport, SubscriptionRequest } from '../types';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyDSaP14gCiA6N9ZwTKYLchhh4Frwdr6mz0",
@@ -526,6 +526,159 @@ export async function updateHabitInFirestore(id: string, userId: string, updates
       existing = existing.map(h => h.id === id ? { ...h, ...updates } : h);
       localStorage.setItem(`syncmate_habits_${userId}`, JSON.stringify(existing));
     }
+  }
+}
+
+import { calculateExpirationDate, getTierDefaultCredits } from './subscriptionService';
+
+export async function addSubscriptionRequestToFirestore(requestData: Omit<SubscriptionRequest, 'id' | 'createdAt'>): Promise<string> {
+  const payload = {
+    ...requestData,
+    createdAt: new Date().toISOString()
+  };
+  try {
+    const colRef = collection(db, 'subscription_requests');
+    const docRef = await addDoc(colRef, payload);
+    return docRef.id;
+  } catch (err) {
+    console.warn('addSubscriptionRequestToFirestore fallback:', err);
+    const id = `req_${Date.now()}`;
+    const local = localStorage.getItem(`syncmate_sub_reqs_${requestData.userId}`);
+    const existing: any[] = local ? JSON.parse(local) : [];
+    existing.push({ ...payload, id });
+    localStorage.setItem(`syncmate_sub_reqs_${requestData.userId}`, JSON.stringify(existing));
+    return id;
+  }
+}
+
+export async function getSubscriptionRequestsFromFirestore(): Promise<SubscriptionRequest[]> {
+  try {
+    const colRef = collection(db, 'subscription_requests');
+    const snap = await getDocs(colRef);
+    const requests: SubscriptionRequest[] = snap.docs.map(docSnap => ({
+      id: docSnap.id,
+      ...(docSnap.data() as Omit<SubscriptionRequest, 'id'>)
+    }));
+    // Also merge any local fallback requests
+    const localReqs: SubscriptionRequest[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('syncmate_sub_reqs_')) {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+          if (Array.isArray(parsed)) {
+            localReqs.push(...parsed);
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+    // Deduplicate by ID
+    const map = new Map<string, SubscriptionRequest>();
+    requests.forEach(r => map.set(r.id, r));
+    localReqs.forEach(r => {
+      if (!map.has(r.id)) map.set(r.id, r);
+    });
+    return Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  } catch (err) {
+    console.warn('getSubscriptionRequestsFromFirestore fallback:', err);
+    const localReqs: SubscriptionRequest[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('syncmate_sub_reqs_')) {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+          if (Array.isArray(parsed)) {
+            localReqs.push(...parsed);
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+    return localReqs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+}
+
+export async function updateSubscriptionRequestStatus(requestId: string, status: 'pending' | 'contacted' | 'approved' | 'rejected', userId?: string): Promise<void> {
+  try {
+    if (!requestId.startsWith('req_')) {
+      const docRef = doc(db, 'subscription_requests', requestId);
+      await updateDoc(docRef, { status, updatedAt: new Date().toISOString() });
+    }
+  } catch (err) {
+    console.warn('updateSubscriptionRequestStatus fallback:', err);
+  } finally {
+    if (userId) {
+      const key = `syncmate_sub_reqs_${userId}`;
+      const local = localStorage.getItem(key);
+      if (local) {
+        try {
+          let list: SubscriptionRequest[] = JSON.parse(local);
+          list = list.map(r => r.id === requestId ? { ...r, status } : r);
+          localStorage.setItem(key, JSON.stringify(list));
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+  }
+}
+
+export async function activateUserSubscriptionInFirestore(
+  userId: string,
+  tier: 'spark' | 'premium' | 'extra_premium',
+  durationMonths: number,
+  customCredits?: number
+): Promise<{ startDate: string; endDate: string }> {
+  const startDate = new Date().toISOString();
+  const endDate = calculateExpirationDate(durationMonths);
+  const credits = getTierDefaultCredits(tier, customCredits);
+
+  const updates = {
+    tier,
+    byokUnlocked: true,
+    dailyCredits: credits,
+    subscriptionStartDate: startDate,
+    subscriptionEndDate: endDate,
+    updatedAt: startDate
+  };
+
+  try {
+    const userDocRef = doc(db, 'users', userId);
+    await updateDoc(userDocRef, updates);
+  } catch (err) {
+    console.warn('activateUserSubscriptionInFirestore doc update fallback:', err);
+  } finally {
+    // Also sync localStorage if present
+    const localProfileKey = `syncmate_profile_${userId}`;
+    const local = localStorage.getItem(localProfileKey);
+    if (local) {
+      try {
+        const parsed = JSON.parse(local);
+        localStorage.setItem(localProfileKey, JSON.stringify({ ...parsed, ...updates }));
+      } catch (e) {
+        // ignore
+      }
+    }
+  }
+
+  return { startDate, endDate };
+}
+
+export async function getAllUsersFromFirestore(): Promise<UserProfile[]> {
+  try {
+    const colRef = collection(db, 'users');
+    const snap = await getDocs(colRef);
+    const users: UserProfile[] = snap.docs.map(d => ({
+      uid: d.id,
+      ...(d.data() as Omit<UserProfile, 'uid'>)
+    }));
+    return users;
+  } catch (err) {
+    console.warn('getAllUsersFromFirestore fallback:', err);
+    return [];
   }
 }
 
