@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getDecryptedApiKey } from '../lib/cryptoStorage';
+import { callGeminiWithFallback } from '../lib/geminiService';
 import { 
   Sparkles, 
   Camera, 
@@ -155,48 +156,41 @@ export const MyLookView: React.FC<MyLookViewProps> = ({
         publicPhotoUrl = imgbbUrl;
       }
 
-      const customApiKey = await getDecryptedApiKey();
-      const apiKey = customApiKey || 'AIzaSyDSaP14gCiA6N9ZwTKYLchhh4Frwdr6mz0'; // fallback key
-
       // Extract raw base64 data and mime type
       const mimeMatch = selectedImage.match(/^data:(image\/[a-zA-Z]+);base64,/);
       const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
       const rawBase64 = selectedImage.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
 
-      if (apiKey && rawBase64) {
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+      if (rawBase64) {
         const promptText = `Analyze this facial biometrics photo for a grooming report. Public Image URL: ${publicPhotoUrl}.
-Return ONLY a JSON object with these exact keys: 
+Return ONLY a valid JSON object with these exact keys: 
 "faceShape" (string, e.g. "Oval"), 
 "groomingFeedback" (string, 1-2 sentence detailed feedback), 
 "suggestedHaircut" (string, name of recommended haircut), 
 "suggestedBeard" (string, recommended facial hair or clean shave style), 
 "fitnessPosture" (string, posture and shoulder symmetry analysis), 
-"overallScore" (number from 70 to 98).`;
+"overallScore" (number from 70 to 98).
+Ensure output is valid JSON.`;
 
-        const response = await fetch(geminiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  { text: promptText },
-                  { inlineData: { mimeType, data: rawBase64 } }
-                ]
-              }
-            ],
-            generationConfig: {
-              responseMimeType: 'application/json'
-            }
-          })
+        const replyText = await callGeminiWithFallback(promptText, {
+          imageBase64: rawBase64,
+          mimeType
         });
 
-        if (response.ok) {
-          const resJson = await response.json();
-          const candidateText = resJson?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (candidateText) {
-            const parsed = JSON.parse(candidateText);
+        if (replyText) {
+          let parsed: any = null;
+          const match = replyText.match(/```json\s*([\s\S]*?)\s*```/);
+          if (match && match[1]) {
+            parsed = JSON.parse(match[1]);
+          } else {
+            try {
+              parsed = JSON.parse(replyText);
+            } catch (e) {
+              // ignore
+            }
+          }
+
+          if (parsed) {
             reportData = {
               faceShape: parsed.faceShape || reportData.faceShape,
               groomingFeedback: parsed.groomingFeedback || reportData.groomingFeedback,
@@ -250,25 +244,31 @@ Return ONLY a JSON object with these exact keys:
 
     setIsGeneratingVisual(true);
     try {
-      const customApiKey = (await getDecryptedApiKey()) || undefined;
-      const res = await fetch('/api/my-look/generate-visual', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageUrl: targetImage,
-          haircut: targetHaircut,
-          beard: targetBeard,
-          size: targetSize,
-          customApiKey
-        })
-      });
+      try {
+        const res = await fetch('/api/my-look/generate-visual', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageUrl: targetImage,
+            haircut: targetHaircut,
+            beard: targetBeard,
+            size: targetSize
+          })
+        });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.imageUrl) {
-          setGeneratedVisualUrl(data.imageUrl);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.imageUrl) {
+            setGeneratedVisualUrl(data.imageUrl);
+            return;
+          }
         }
+      } catch (err) {
+        console.warn('Backend generate-visual endpoint unavailable, applying client-side fallback:', err);
       }
+
+      // Client-side fallback: display the target base image
+      setGeneratedVisualUrl(targetImage);
     } catch (err) {
       console.error('Failed to generate Nano Banana visual:', err);
     } finally {
@@ -289,25 +289,28 @@ Return ONLY a JSON object with these exact keys:
 
         setComparingProgress(true);
         try {
-          const customApiKey = (await getDecryptedApiKey()) || undefined;
-          const res = await fetch('/api/my-look/compare', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              previousReport,
-              newReport,
-              customApiKey
-            })
-          });
+          const prompt = `Compare these two user grooming/biometric check-in reports and write a short encouraging 2-sentence progress summary highlighting improvements in score, grooming, or posture:
+PREVIOUS REPORT:
+- Score: ${previousReport.overallScore}/100
+- Face Shape: ${previousReport.faceShape}
+- Grooming: ${previousReport.groomingFeedback}
+- Haircut/Beard: ${previousReport.suggestedHaircut} / ${previousReport.suggestedBeard}
+- Posture: ${previousReport.fitnessPosture}
 
-          if (res.ok) {
-            const data = await res.json();
-            if (data.progressSummary) {
-              setProgressInsight(data.progressSummary);
-            }
+NEW REPORT:
+- Score: ${newReport.overallScore}/100
+- Face Shape: ${newReport.faceShape}
+- Grooming: ${newReport.groomingFeedback}
+- Haircut/Beard: ${newReport.suggestedHaircut} / ${newReport.suggestedBeard}
+- Posture: ${newReport.fitnessPosture}`;
+
+          const summaryText = await callGeminiWithFallback(prompt);
+          if (summaryText) {
+            setProgressInsight(summaryText);
           }
         } catch (err) {
           console.warn('Comparison endpoint error:', err);
+          setProgressInsight(`Score updated from ${previousReport.overallScore}/100 to ${newReport.overallScore}/100. Continuous posture and grooming check-ins are driving steady progress!`);
         } finally {
           setComparingProgress(false);
         }

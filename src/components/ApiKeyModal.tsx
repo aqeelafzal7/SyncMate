@@ -89,7 +89,15 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
         }, 1200);
       } else {
         const errorData = await res.json().catch(() => ({}));
-        const msg = errorData.error?.message || 'Invalid API Key. Please verify in Google AI Studio.';
+        const rawMsg = JSON.stringify(errorData);
+        let msg = errorData.error?.message || 'Invalid API Key. Please verify in Google AI Studio.';
+        if (
+          res.status === 403 ||
+          rawMsg.includes('API_KEY_HTTP_REFERRER_BLOCKED') ||
+          rawMsg.includes('PERMISSION_DENIED')
+        ) {
+          msg = "API Key Blocked: Your Google API key is restricted by HTTP Referrer. Please add 'https://*.run.app/*' and 'https://syncmate.pages.dev/*' to your allowed websites in Google Cloud Console.";
+        }
         setStatusMessage({
           text: `❌ ${msg}`,
           type: 'error'

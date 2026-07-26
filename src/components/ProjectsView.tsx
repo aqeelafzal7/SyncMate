@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Project, Task, UserProfile, PrayerTimings } from '../types';
 import { getDecryptedApiKey } from '../lib/cryptoStorage';
+import { callGeminiWithFallback } from '../lib/geminiService';
 
 interface ProjectsViewProps {
   projects: Project[];
@@ -392,65 +393,83 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
     setDecomposedMessage(null);
 
     try {
-      const activeApiKey = (await getDecryptedApiKey()) || undefined;
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: 'decompose_project',
-          customApiKey: activeApiKey,
-          context: {
-            project,
-            userProfile,
-            existingTasks,
-            prayerTimings,
-          },
-        }),
-      });
+      const decomposePrompt = `You are SyncMate AI Planner. Decompose the following project into actionable milestone tasks according to the project's pacing strategy (${project.pacingStrategy || 'balanced'}).
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || 'Failed to decompose project');
+PROJECT DETAILS:
+Title: ${project.title}
+Description: ${project.description || 'N/A'}
+Platform: ${project.platform || 'N/A'}
+Time Available: ${project.timeCommitment || 'N/A'}
+Total Duration: ${project.totalDuration || 'N/A'}
+Goals/Milestones: ${Array.isArray(project.goals) ? project.goals.join(', ') : 'N/A'}
+
+USER CONTEXT:
+Name: ${userProfile?.fullName || 'User'}
+Religion/Focus: ${userProfile?.religion || 'General'}
+
+Return a JSON action block surrounded by \`\`\`json_action and \`\`\` containing:
+{
+  "action": "DECOMPOSE_PROJECT",
+  "data": {
+    "tasks": [
+      {
+        "title": "Milestone title",
+        "description": "Short description",
+        "startTime": "10:00",
+        "endTime": "10:45",
+        "category": "study",
+        "aiTip": "Actionable tip",
+        "dayOffset": 0
       }
+    ]
+  }
+}
+Day offsets should range from 0 up to 7 depending on pacing. Ensure valid JSON inside \`\`\`json_action \`\`\`.`;
 
-      const data = await res.json();
-      const replyText = data.reply || '';
+      const replyText = await callGeminiWithFallback(decomposePrompt);
 
+      let actionObj: any = null;
       const match = replyText.match(/```json_action\s*([\s\S]*?)\s*```/);
       if (match && match[1]) {
-        const actionObj = JSON.parse(match[1]);
-        if (actionObj.action === 'DECOMPOSE_PROJECT' && Array.isArray(actionObj.data?.tasks)) {
-          const tasksToCreate = actionObj.data.tasks;
-          const now = new Date();
-
-          for (const t of tasksToCreate) {
-            const dayOffset = typeof t.dayOffset === 'number' ? t.dayOffset : 0;
-            const targetDateObj = new Date(now.getTime() + dayOffset * 86400000);
-            const taskDate = `${targetDateObj.getFullYear()}-${String(targetDateObj.getMonth() + 1).padStart(2, '0')}-${String(targetDateObj.getDate()).padStart(2, '0')}`;
-
-            await onTaskCreated({
-              userId,
-              title: t.title || `Milestone for ${project.title}`,
-              description: t.description || `Subtask from ${project.title}`,
-              startTime: t.startTime || '10:00',
-              endTime: t.endTime || '10:45',
-              category: t.category || 'study',
-              status: 'todo',
-              aiTip: t.aiTip || `AI Decomposed milestone for ${project.title}`,
-              projectId: project.id,
-              date: taskDate,
-              createdAt: new Date().toISOString()
-            });
-          }
-          setDecomposedMessage({
-            projectId: project.id,
-            text: `⚡ Multi-day schedule created! Assigned ${tasksToCreate.length} milestones across your upcoming Daily Timelines according to your ${project.pacingStrategy || 'balanced'} pace.`
-          });
-        } else {
-          throw new Error('Received unexpected AI action response.');
-        }
+        actionObj = JSON.parse(match[1]);
       } else {
-        throw new Error('Could not parse AI response. Make sure your Gemini API key is configured.');
+        // Fallback: try parsing JSON directly if markdown wrapper missing
+        try {
+          actionObj = JSON.parse(replyText);
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      if (actionObj && (actionObj.action === 'DECOMPOSE_PROJECT' || Array.isArray(actionObj.data?.tasks) || Array.isArray(actionObj.tasks))) {
+        const tasksToCreate = actionObj.data?.tasks || actionObj.tasks || [];
+        const now = new Date();
+
+        for (const t of tasksToCreate) {
+          const dayOffset = typeof t.dayOffset === 'number' ? t.dayOffset : 0;
+          const targetDateObj = new Date(now.getTime() + dayOffset * 86400000);
+          const taskDate = `${targetDateObj.getFullYear()}-${String(targetDateObj.getMonth() + 1).padStart(2, '0')}-${String(targetDateObj.getDate()).padStart(2, '0')}`;
+
+          await onTaskCreated({
+            userId,
+            title: t.title || `Milestone for ${project.title}`,
+            description: t.description || `Subtask from ${project.title}`,
+            startTime: t.startTime || '10:00',
+            endTime: t.endTime || '10:45',
+            category: t.category || 'study',
+            status: 'todo',
+            aiTip: t.aiTip || `AI Decomposed milestone for ${project.title}`,
+            projectId: project.id,
+            date: taskDate,
+            createdAt: new Date().toISOString()
+          });
+        }
+        setDecomposedMessage({
+          projectId: project.id,
+          text: `⚡ Multi-day schedule created! Assigned ${tasksToCreate.length} milestones across your upcoming Daily Timelines according to your ${project.pacingStrategy || 'balanced'} pace.`
+        });
+      } else {
+        throw new Error('Received unexpected AI response structure.');
       }
     } catch (err: any) {
       console.error('Decompose project error:', err);

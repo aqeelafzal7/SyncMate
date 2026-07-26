@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getDecryptedApiKey } from '../lib/cryptoStorage';
+import { callGeminiWithFallback } from '../lib/geminiService';
 import { AddWardrobeItemModal } from './AddWardrobeItemModal';
 import { 
   Shirt, 
@@ -196,27 +197,70 @@ export const TodayWearView: React.FC<TodayWearViewProps> = ({
     let resultingOutfits: StylistOutfitOption[] = [];
 
     try {
-      const customApiKey = (await getDecryptedApiKey()) || undefined;
-      const res = await fetch('/api/wardrobe/stylist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          weather,
-          tasks,
-          wardrobeItems: cleanItems,
-          userProfile,
-          customApiKey
-        })
-      });
+      const itemsSummary = cleanItems.map(item => `[ID: ${item.id}] ${item.name} (Category: ${item.category}${item.tags?.color ? `, Color: ${item.tags.color}` : ''})`).join('\n');
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.outfits && Array.isArray(data.outfits) && data.outfits.length > 0) {
-          resultingOutfits = data.outfits;
+      const stylistPrompt = `You are SyncMate AI Personal Stylist. Analyze the user's available wardrobe PNG items, local weather, and today's schedule to create 3 styled outfit recommendations.
+
+WEATHER CONTEXT:
+Temperature: ${weather?.temperature || 24}°C, Condition: ${weather?.condition || 'Clear'}
+
+SCHEDULE / TASKS:
+${tasks.map(t => `- ${t.title} (${t.category || 'general'}, ${t.startTime || ''}-${t.endTime || ''})`).join('\n') || 'No scheduled tasks today'}
+
+AVAILABLE CLEAN WARDROBE ITEMS:
+${itemsSummary || 'No specific wardrobe items listed'}
+
+REQUIREMENTS:
+Select from the available item IDs above to create 3 distinct outfit options:
+1. Option A: Executive Sharp (high impact, professional)
+2. Option B: Smart Casual Alternative (versatile, agile)
+3. Option C: Deep Focus Comfort (ergonomic, comfortable)
+
+Return ONLY a valid JSON array containing 3 objects matching this exact structure:
+[
+  {
+    "id": "option_a",
+    "title": "Option A: Executive Sharp",
+    "vibe": "Optimal for executive meetings & clear weather",
+    "itemIds": ["id1", "id2"],
+    "styleNotes": "High impact tailored ensemble for executive confidence."
+  },
+  {
+    "id": "option_b",
+    "title": "Option B: Smart Casual Alternative",
+    "vibe": "Versatile and modern",
+    "itemIds": ["id1", "id3"],
+    "styleNotes": "Clean, effortless style for agile focus."
+  },
+  {
+    "id": "option_c",
+    "title": "Option C: Deep Focus Comfort",
+    "vibe": "Ergonomic comfort for long hours",
+    "itemIds": ["id2", "id4"],
+    "styleNotes": "Maximum breathable comfort for deep work."
+  }
+]
+Only use item IDs that actually exist in the AVAILABLE CLEAN WARDROBE ITEMS list. Ensure output is valid JSON array inside \`\`\`json \`\`\` or raw JSON array.`;
+
+      const replyText = await callGeminiWithFallback(stylistPrompt);
+
+      let parsedOutfits: any[] = [];
+      const match = replyText.match(/```json\s*([\s\S]*?)\s*```/);
+      if (match && match[1]) {
+        parsedOutfits = JSON.parse(match[1]);
+      } else {
+        try {
+          parsedOutfits = JSON.parse(replyText);
+        } catch (e) {
+          // ignore
         }
       }
+
+      if (Array.isArray(parsedOutfits) && parsedOutfits.length > 0) {
+        resultingOutfits = parsedOutfits;
+      }
     } catch (err) {
-      console.warn('Stylist endpoint error, applying client-side fallback:', err);
+      console.warn('Stylist client-side call error, applying fallback:', err);
     }
 
     if (resultingOutfits.length === 0) {
@@ -320,26 +364,32 @@ export const TodayWearView: React.FC<TodayWearViewProps> = ({
         .filter(Boolean) as WardrobeItem[];
 
       const clothingImageUrls = outfitItems.map((item) => item.imageUrl).filter(Boolean);
-      const customApiKey = (await getDecryptedApiKey()) || undefined;
 
-      const res = await fetch('/api/wardrobe/virtual-tryon', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userImageUrl: tryOnUserPhotoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&auto=format&fit=crop&q=80',
-          clothingImageUrls,
-          outfitTitle: selectedOutfitForTryOn.title,
-          size: sizeToUse,
-          customApiKey
-        })
-      });
+      try {
+        const res = await fetch('/api/wardrobe/virtual-tryon', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userImageUrl: tryOnUserPhotoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&auto=format&fit=crop&q=80',
+            clothingImageUrls,
+            outfitTitle: selectedOutfitForTryOn.title,
+            size: sizeToUse
+          })
+        });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.imageUrl) {
-          setTryOnResultUrl(data.imageUrl);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.imageUrl) {
+            setTryOnResultUrl(data.imageUrl);
+            return;
+          }
         }
+      } catch (apiErr) {
+        console.warn('Backend virtual-tryon endpoint unavailable, applying client-side fallback:', apiErr);
       }
+
+      const mainItemImage = clothingImageUrls[0] || tryOnUserPhotoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&auto=format&fit=crop&q=80';
+      setTryOnResultUrl(mainItemImage);
     } catch (err) {
       console.error('Virtual try-on error:', err);
     } finally {
