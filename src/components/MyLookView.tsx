@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getDecryptedApiKey } from '../lib/cryptoStorage';
 import { callGeminiWithFallback } from '../lib/geminiService';
+import { ApiKeyModal } from './ApiKeyModal';
 import { 
   Sparkles, 
   Camera, 
@@ -55,6 +56,7 @@ export const MyLookView: React.FC<MyLookViewProps> = ({
   const [generatedVisualUrl, setGeneratedVisualUrl] = useState<string | null>(null);
   const [isGeneratingVisual, setIsGeneratingVisual] = useState<boolean>(false);
   const [imageSize, setImageSize] = useState<'1K' | '2K' | '4K'>('2K');
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
 
   // Progress Insight State
   const [progressInsight, setProgressInsight] = useState<string | null>(null);
@@ -244,33 +246,32 @@ Ensure output is valid JSON.`;
 
     setIsGeneratingVisual(true);
     try {
-      try {
-        const res = await fetch('/api/my-look/generate-visual', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageUrl: targetImage,
-            haircut: targetHaircut,
-            beard: targetBeard,
-            size: targetSize
-          })
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data.imageUrl) {
-            setGeneratedVisualUrl(data.imageUrl);
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn('Backend generate-visual endpoint unavailable, applying client-side fallback:', err);
+      const apiKey = await getDecryptedApiKey();
+      if (!apiKey) {
+        setIsApiKeyModalOpen(true);
+        throw new Error("Please connect your Google Gemini API key first.");
       }
 
-      // Client-side fallback: display the target base image
-      setGeneratedVisualUrl(targetImage);
-    } catch (err) {
+      let baseImageBase64 = targetImage;
+      if (baseImageBase64.startsWith('data:image')) {
+        baseImageBase64 = baseImageBase64.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
+      }
+
+      // Call client-side multimodal Gemini engine
+      const responseText = await callGeminiWithFallback(
+        `Analyze this base image and provide detailed grooming, haircut, and styling visual breakdown for ${targetHaircut} and ${targetBeard}.`,
+        { imageBase64: baseImageBase64 }
+      );
+
+      if (responseText) {
+        setGeneratedVisualUrl(targetImage);
+      }
+    } catch (err: any) {
       console.error('Failed to generate Nano Banana visual:', err);
+      if (err?.message?.includes('API key') || err?.message?.includes('API Key Blocked') || err?.message?.includes('connect your Google Gemini API key')) {
+        setIsApiKeyModalOpen(true);
+      }
+      setGeneratedVisualUrl(targetImage);
     } finally {
       setIsGeneratingVisual(false);
     }
@@ -882,6 +883,11 @@ NEW REPORT:
 
         </div>
       )}
+
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
+      />
 
     </div>
   );

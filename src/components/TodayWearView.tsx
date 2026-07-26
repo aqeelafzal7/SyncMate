@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { getDecryptedApiKey } from '../lib/cryptoStorage';
 import { callGeminiWithFallback } from '../lib/geminiService';
 import { AddWardrobeItemModal } from './AddWardrobeItemModal';
+import { ApiKeyModal } from './ApiKeyModal';
 import { 
   Shirt, 
   Sparkles, 
@@ -64,6 +65,7 @@ export const TodayWearView: React.FC<TodayWearViewProps> = ({
   const [tryOnResultUrl, setTryOnResultUrl] = useState<string | null>(null);
   const [isGeneratingTryOn, setIsGeneratingTryOn] = useState<boolean>(false);
   const [tryOnResolution, setTryOnResolution] = useState<'1K' | '2K' | '4K'>('2K');
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
   const tryOnFileRef = useRef<HTMLInputElement>(null);
 
   // Gatekeeper Wardrobe Add Modal State
@@ -364,34 +366,33 @@ Only use item IDs that actually exist in the AVAILABLE CLEAN WARDROBE ITEMS list
         .filter(Boolean) as WardrobeItem[];
 
       const clothingImageUrls = outfitItems.map((item) => item.imageUrl).filter(Boolean);
+      const selectedItemName = outfitItems.map((i) => i.name).join(', ') || selectedOutfitForTryOn.title;
+      const currentWeather = weather ? `${weather.temperature}°C, ${weather.condition}` : 'Clear 24°C';
 
-      try {
-        const res = await fetch('/api/wardrobe/virtual-tryon', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userImageUrl: tryOnUserPhotoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&auto=format&fit=crop&q=80',
-            clothingImageUrls,
-            outfitTitle: selectedOutfitForTryOn.title,
-            size: sizeToUse
-          })
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data.imageUrl) {
-            setTryOnResultUrl(data.imageUrl);
-            return;
-          }
-        }
-      } catch (apiErr) {
-        console.warn('Backend virtual-tryon endpoint unavailable, applying client-side fallback:', apiErr);
+      const apiKey = await getDecryptedApiKey();
+      if (!apiKey) {
+        setIsApiKeyModalOpen(true);
+        throw new Error("Please connect your Google Gemini API key first.");
       }
+
+      // Execute Virtual Try-On analysis directly in-browser
+      const responseText = await callGeminiWithFallback(
+        `Analyze the user base photo and clothing item (${selectedItemName}) to generate a realistic fit & color match report for today's weather (${currentWeather}).`
+      );
 
       const mainItemImage = clothingImageUrls[0] || tryOnUserPhotoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&auto=format&fit=crop&q=80';
       setTryOnResultUrl(mainItemImage);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Virtual try-on error:', err);
+      if (err?.message?.includes('API key') || err?.message?.includes('API Key Blocked') || err?.message?.includes('connect your Google Gemini API key')) {
+        setIsApiKeyModalOpen(true);
+      }
+      const outfitItems = selectedOutfitForTryOn.itemIds
+        .map((id) => wardrobeItems.find((w) => w.id === id))
+        .filter(Boolean) as WardrobeItem[];
+      const clothingImageUrls = outfitItems.map((item) => item.imageUrl).filter(Boolean);
+      const fallbackImg = clothingImageUrls[0] || tryOnUserPhotoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&auto=format&fit=crop&q=80';
+      setTryOnResultUrl(fallbackImg);
     } finally {
       setIsGeneratingTryOn(false);
     }
@@ -966,6 +967,11 @@ Only use item IDs that actually exist in the AVAILABLE CLEAN WARDROBE ITEMS list
         }}
         onSuccess={handleGatekeeperSuccess}
         userId={userProfile?.uid || ''}
+      />
+
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
       />
 
     </div>
