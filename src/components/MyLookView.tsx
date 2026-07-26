@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getDecryptedApiKey } from '../lib/cryptoStorage';
-import { callGeminiWithFallback } from '../lib/geminiService';
+import { callGeminiWithFallback, fetchImgbbAsBase64 } from '../lib/geminiService';
 import { ApiKeyModal } from './ApiKeyModal';
 import { 
   Sparkles, 
@@ -122,10 +122,9 @@ export const MyLookView: React.FC<MyLookViewProps> = ({
   const handleAnalyzeBiometrics = async () => {
     if (!selectedImage || !userProfile?.uid) return;
     setIsScanning(true);
-    setScanStep('Uploading photo to ImgBB cloud...');
+    setScanStep('Analyzing facial biometrics & uploading photo...');
 
     const steps = [
-      'Uploading photo to ImgBB cloud...',
       'Mapping Facial Keypoints...',
       'Evaluating Shoulder Symmetry & Posture...',
       'Analyzing Beard Trim & Hairline Structure...',
@@ -152,19 +151,13 @@ export const MyLookView: React.FC<MyLookViewProps> = ({
     let publicPhotoUrl = selectedImage;
 
     try {
-      // 1. Upload image to ImgBB to get a public URL
-      const imgbbUrl = await uploadToImgBB(selectedImage);
-      if (imgbbUrl) {
-        publicPhotoUrl = imgbbUrl;
-      }
+      // Get base64 + mimeType from selectedImage (memory data URI or URL)
+      const { base64: rawBase64, mimeType } = await fetchImgbbAsBase64(selectedImage);
 
-      // Extract raw base64 data and mime type
-      const mimeMatch = selectedImage.match(/^data:(image\/[a-zA-Z]+);base64,/);
-      const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-      const rawBase64 = selectedImage.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
-
-      if (rawBase64) {
-        const promptText = `Analyze this facial biometrics photo for a grooming report. Public Image URL: ${publicPhotoUrl}.
+      // PIPELINE A: Instant Gemini AI Vision Analysis
+      const geminiPromise = (async () => {
+        if (!rawBase64) return null;
+        const promptText = `Analyze this facial biometrics photo for a grooming report.
 Return ONLY a valid JSON object with these exact keys: 
 "faceShape" (string, e.g. "Oval"), 
 "groomingFeedback" (string, 1-2 sentence detailed feedback), 
@@ -174,44 +167,62 @@ Return ONLY a valid JSON object with these exact keys:
 "overallScore" (number from 70 to 98).
 Ensure output is valid JSON.`;
 
-        const replyText = await callGeminiWithFallback(promptText, {
+        return await callGeminiWithFallback(promptText, {
           imageBase64: rawBase64,
           mimeType
         });
+      })();
 
-        if (replyText) {
-          let parsed: any = null;
-          const match = replyText.match(/```json\s*([\s\S]*?)\s*```/);
-          if (match && match[1]) {
-            parsed = JSON.parse(match[1]);
-          } else {
-            try {
-              parsed = JSON.parse(replyText);
-            } catch (e) {
-              // ignore
-            }
-          }
+      // PIPELINE B: Parallel ImgBB Cloud Hosting
+      const imgbbPromise = uploadToImgBB(selectedImage);
 
-          if (parsed) {
-            reportData = {
-              faceShape: parsed.faceShape || reportData.faceShape,
-              groomingFeedback: parsed.groomingFeedback || reportData.groomingFeedback,
-              suggestedHaircut: parsed.suggestedHaircut || reportData.suggestedHaircut,
-              suggestedBeard: parsed.suggestedBeard || reportData.suggestedBeard,
-              fitnessPosture: parsed.fitnessPosture || reportData.fitnessPosture,
-              overallScore: Number(parsed.overallScore) || reportData.overallScore
-            };
+      const [replyText, imgbbUrl] = await Promise.all([
+        geminiPromise.catch((err) => {
+          console.warn('Direct Gemini API call failed, proceeding with biometric fallback:', err);
+          return null;
+        }),
+        imgbbPromise.catch((err) => {
+          console.warn('ImgBB upload failed:', err);
+          return null;
+        })
+      ]);
+
+      if (imgbbUrl) {
+        publicPhotoUrl = imgbbUrl;
+      }
+
+      if (replyText) {
+        let parsed: any = null;
+        const match = replyText.match(/```json\s*([\s\S]*?)\s*```/);
+        if (match && match[1]) {
+          parsed = JSON.parse(match[1]);
+        } else {
+          try {
+            parsed = JSON.parse(replyText);
+          } catch (e) {
+            // ignore
           }
+        }
+
+        if (parsed) {
+          reportData = {
+            faceShape: parsed.faceShape || reportData.faceShape,
+            groomingFeedback: parsed.groomingFeedback || reportData.groomingFeedback,
+            suggestedHaircut: parsed.suggestedHaircut || reportData.suggestedHaircut,
+            suggestedBeard: parsed.suggestedBeard || reportData.suggestedBeard,
+            fitnessPosture: parsed.fitnessPosture || reportData.fitnessPosture,
+            overallScore: Number(parsed.overallScore) || reportData.overallScore
+          };
         }
       }
     } catch (err) {
-      console.warn('Direct Gemini API call failed, proceeding with biometric fallback:', err);
+      console.warn('Biometrics analysis error:', err);
     } finally {
       clearInterval(interval);
     }
 
     try {
-      // 2. Save ImgBB public URL alongside report to Firestore 'my_look_reports'
+      // Save ImgBB public URL alongside report to Firestore 'my_look_reports'
       await addMyLookReportToFirestore({
         userId: userProfile.uid,
         imageUrl: publicPhotoUrl,
@@ -240,7 +251,6 @@ Ensure output is valid JSON.`;
     const targetImage = imageUrl || report?.imageUrl;
     const targetHaircut = haircut || report?.suggestedHaircut || 'Tailored Executive Contour';
     const targetBeard = beard || report?.suggestedBeard || 'Clean Boxed Beard';
-    const targetSize = customSize || imageSize;
 
     if (!targetImage) return;
 
@@ -252,15 +262,13 @@ Ensure output is valid JSON.`;
         throw new Error("Please connect your Google Gemini API key first.");
       }
 
-      let baseImageBase64 = targetImage;
-      if (baseImageBase64.startsWith('data:image')) {
-        baseImageBase64 = baseImageBase64.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
-      }
+      // Convert targetImage (data URI or ImgBB HTTP URL) to clean base64 + mimeType
+      const { base64, mimeType } = await fetchImgbbAsBase64(targetImage);
 
       // Call client-side multimodal Gemini engine
       const responseText = await callGeminiWithFallback(
         `Analyze this base image and provide detailed grooming, haircut, and styling visual breakdown for ${targetHaircut} and ${targetBeard}.`,
-        { imageBase64: baseImageBase64 }
+        { imageBase64: base64, mimeType }
       );
 
       if (responseText) {

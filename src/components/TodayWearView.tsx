@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getDecryptedApiKey } from '../lib/cryptoStorage';
-import { callGeminiWithFallback } from '../lib/geminiService';
+import { callGeminiWithFallback, fetchImgbbAsBase64 } from '../lib/geminiService';
 import { AddWardrobeItemModal } from './AddWardrobeItemModal';
 import { ApiKeyModal } from './ApiKeyModal';
 import { 
@@ -375,9 +375,20 @@ Only use item IDs that actually exist in the AVAILABLE CLEAN WARDROBE ITEMS list
         throw new Error("Please connect your Google Gemini API key first.");
       }
 
+      const targetPhotoUrl = tryOnUserPhotoUrl || clothingImageUrls[0];
+      let options: { imageBase64?: string; mimeType?: string } = {};
+
+      if (targetPhotoUrl) {
+        const { base64, mimeType } = await fetchImgbbAsBase64(targetPhotoUrl);
+        if (base64) {
+          options = { imageBase64: base64, mimeType };
+        }
+      }
+
       // Execute Virtual Try-On analysis directly in-browser
       const responseText = await callGeminiWithFallback(
-        `Analyze the user base photo and clothing item (${selectedItemName}) to generate a realistic fit & color match report for today's weather (${currentWeather}).`
+        `Analyze the user base photo and clothing item (${selectedItemName}) to generate a realistic fit & color match report for today's weather (${currentWeather}).`,
+        options
       );
 
       const mainItemImage = clothingImageUrls[0] || tryOnUserPhotoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&auto=format&fit=crop&q=80';

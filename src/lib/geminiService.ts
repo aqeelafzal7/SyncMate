@@ -3,8 +3,7 @@ import { getDecryptedApiKey } from './cryptoStorage';
 const GEMINI_MODELS = [
   'gemini-2.5-flash',
   'gemini-2.5-pro',
-  'gemini-2.0-flash',
-  'gemini-1.5-flash'
+  'gemini-2.0-flash'
 ];
 
 // Default fallback key if user has not entered a custom key
@@ -14,6 +13,61 @@ export interface GeminiOptions {
   systemInstruction?: string;
   imageBase64?: string;
   mimeType?: string;
+}
+
+/**
+ * Helper to get a clean base64 string and mimeType from either a Data URI or an HTTP image URL (e.g., ImgBB).
+ */
+export async function fetchImgbbAsBase64(
+  imageUrl: string
+): Promise<{ base64: string; mimeType: string }> {
+  if (!imageUrl) {
+    return { base64: '', mimeType: 'image/jpeg' };
+  }
+
+  if (imageUrl.startsWith('data:')) {
+    let mimeType = 'image/jpeg';
+    const mimeMatch = imageUrl.match(/^data:(image\/[a-zA-Z0-9\+\-\.]+);base64,/);
+    if (mimeMatch) {
+      mimeType = mimeMatch[1];
+    }
+    const cleanBase64 = imageUrl
+      .replace(/^data:image\/[a-zA-Z0-9\+\-\.]+;base64,/, '')
+      .replace(/\s/g, '')
+      .trim();
+    return { base64: cleanBase64, mimeType };
+  }
+
+  try {
+    const res = await fetch(imageUrl);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch image: ${res.status}`);
+    }
+    const contentType = res.headers.get('content-type') || 'image/jpeg';
+    const blob = await res.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        if (!result) {
+          resolve({ base64: '', mimeType: contentType });
+          return;
+        }
+        const mimeMatch = result.match(/^data:(image\/[a-zA-Z0-9\+\-\.]+);base64,/);
+        const mime = mimeMatch ? mimeMatch[1] : contentType;
+        const cleanBase64 = result
+          .replace(/^data:image\/[a-zA-Z0-9\+\-\.]+;base64,/, '')
+          .replace(/\s/g, '')
+          .trim();
+        resolve({ base64: cleanBase64, mimeType: mime });
+      };
+      reader.onerror = () => resolve({ base64: '', mimeType: contentType });
+      reader.readAsDataURL(blob);
+    });
+  } catch (err) {
+    console.warn('Error converting image URL to base64:', err);
+    return { base64: '', mimeType: 'image/jpeg' };
+  }
 }
 
 /**
@@ -45,12 +99,15 @@ export async function callGeminiWithFallback(
       cleanBase64 = cleanBase64.replace(/^data:image\/[a-zA-Z0-9\+\-\.]+;base64,/, '');
     }
 
-    // Remove any whitespace, newlines, or carriage returns
-    cleanBase64 = cleanBase64.replace(/\s/g, '').trim();
+    // Strip any remaining header and remove whitespace/newlines
+    cleanBase64 = cleanBase64
+      .replace(/^data:image\/[a-zA-Z0-9\+\-\.]+;base64,/, '')
+      .replace(/\s/g, '')
+      .trim();
 
     parts.push({
       inlineData: {
-        mimeType: mimeType,
+        mimeType: mimeType || 'image/jpeg',
         data: cleanBase64
       }
     });
@@ -99,7 +156,7 @@ export async function callGeminiWithFallback(
 
       if (response.status === 400) {
         throw new Error(
-          'Invalid image/request format (HTTP 400). Please ensure your selfie/image is a valid JPEG/PNG.'
+          'Invalid image payload structure (HTTP 400). Please ensure your selfie/image is a valid JPEG/PNG.'
         );
       }
 
@@ -123,6 +180,7 @@ export async function callGeminiWithFallback(
     } catch (err: any) {
       const msg = err.message || '';
       if (
+        msg.includes('Invalid image payload structure') ||
         msg.includes('Invalid image/request format') ||
         msg.includes('Invalid API Key') ||
         msg.includes('API Key Blocked') ||
