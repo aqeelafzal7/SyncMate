@@ -60,9 +60,7 @@ export async function getEffectiveApiKey(
     return systemApiKey;
   }
 
-  throw new Error(
-    '⚡ System AI Engine Key missing. Please check system environment configuration (VITE_GEMINI_SYSTEM_API_KEY) or upgrade to a paid tier.'
-  );
+  throw new Error("System AI Engine unavailable. Please check environment configurations.");
 }
 
 /**
@@ -127,10 +125,15 @@ export async function callGeminiWithFallback(
   prompt: string,
   options?: GeminiOptions
 ): Promise<string> {
-  const apiKey = await getEffectiveApiKey(options?.customApiKey, options?.userProfile);
+  const activeKey =
+    options?.customApiKey ||
+    (await getDecryptedApiKey()) ||
+    (import.meta.env.VITE_GEMINI_SYSTEM_API_KEY as string) ||
+    (import.meta.env.VITE_GEMINI_API_KEY as string) ||
+    DEFAULT_FALLBACK_KEY;
 
-  if (!apiKey) {
-    throw new Error('⚡ System AI Engine Key missing. Please check system environment config.');
+  if (!activeKey) {
+    throw new Error("System AI Engine unavailable. Please check environment configurations.");
   }
 
   // Build parts array
@@ -186,7 +189,7 @@ export async function callGeminiWithFallback(
 
   for (const model of GEMINI_MODELS) {
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`;
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -251,6 +254,6 @@ export async function callGeminiWithFallback(
   }
 
   throw new Error(
-    lastError?.message || 'All Gemini models failed. Please verify your API key in the top header.'
+    lastError?.message || "System AI Engine unavailable. Please check environment configurations."
   );
 }

@@ -176,6 +176,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  isError?: boolean;
   actionData?: {
     action: 'CREATE_TASK' | 'CREATE_PROJECT' | 'UPDATE_PROFILE' | 'CREATE_FITNESS_PLAN';
     data: any;

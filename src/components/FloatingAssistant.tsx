@@ -20,6 +20,8 @@ import { ChatMessage, UserProfile, Task, PrayerTimings, WeatherData } from '../t
 import { speakResponse, stopSpeech } from '../lib/audioService';
 import { encryptAndSaveApiKey, getDecryptedApiKey, removeSavedApiKey } from '../lib/cryptoStorage';
 import { saveUserProfile } from '../lib/firebase';
+import { callGeminiWithFallback } from '../lib/geminiService';
+import { deductUserCredits } from '../lib/creditService';
 
 interface FloatingAssistantProps {
   isOpen: boolean;
@@ -191,14 +193,15 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
     setMessages(newMessages);
     setInput('');
 
+    const dailyCredits = userProfile?.dailyCredits ?? 6;
     const isFreeTier = userProfile.tier === 'free' && userProfile.email !== 'chaqeelpak@gmail.com';
     const currentChatCount = userProfile.chatMessageCount || 0;
 
-    if (isFreeTier && currentChatCount >= 15) {
+    if (dailyCredits <= 0 || (isFreeTier && currentChatCount >= 15)) {
       const limitMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: "⚡ **Free Tier Daily Chat Limit Reached (15/15 messages).** Upgrade to Spark Plan for unlimited chat with your AI Assistant!",
+        content: "⚡ Daily Chat Limit Reached. Your credits reset at Midnight (00:00) or upgrade to Spark/Premium.",
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages([...newMessages, limitMsg]);
@@ -208,6 +211,7 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
       return;
     }
 
+    deductUserCredits(1, userProfile.uid).catch(console.warn);
     if (isFreeTier) {
       const newCount = currentChatCount + 1;
       const updatedProf = { ...userProfile, chatMessageCount: newCount };
@@ -215,47 +219,9 @@ How can I help you today? You can speak or type to schedule tasks, plan projects
     }
 
     try {
-      const activeApiKey = customApiKey || (await getDecryptedApiKey()) || undefined;
       let replyText = '';
 
-      try {
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            mode: 'assistant',
-            customApiKey: activeApiKey,
-            messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-            context: {
-              userProfile,
-              tasks: tasks.map(t => ({ id: t.id, title: t.title, startTime: t.startTime, endTime: t.endTime, status: t.status })),
-              prayerTimings,
-              weather,
-              currentLocalTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            }
-          }),
-        });
-
-        if (!res.ok) {
-          throw new Error(`Backend /api/chat returned status ${res.status}`);
-        }
-
-        const resText = await res.text();
-        if (!resText || !resText.trim()) {
-          throw new Error('Received empty response from backend.');
-        }
-
-        const data = JSON.parse(resText);
-        replyText = data.reply || '';
-      } catch (serverErr: any) {
-        console.warn('Backend /api/chat endpoint failed or unavailable, attempting direct client-side Gemini fallback:', serverErr);
-
-        if (!activeApiKey) {
-          throw new Error('Backend server is unavailable and no personal Gemini API key was found. Please click "🔑 API Key" in the chat header to enter your API key.');
-        }
-
-        const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${activeApiKey}`;
-        const systemInstruction = `You are SyncMate, an elite, Autonomous AI Assistant and Fitness Coach for ${userProfile.name || 'User'}. You must be conversational, sharp, and highly proactive.
+      const systemInstruction = `You are SyncMate, an elite, Autonomous AI Assistant and Fitness Coach for ${userProfile.name || 'User'}. You must be conversational, sharp, and highly proactive.
 
 CRITICAL OPERATIONAL & FITNESS RULES:
 1. INQUISITIVE & PROACTIVE: When given vague goals, ask 1-2 sharp clarifying questions. If the user asks for fitness/health goals (e.g. weight loss, height/posture stretching, core strength, no-equipment workouts), ask: "How many days a week can you commit, and what time of day works best (morning or evening)?"
@@ -288,34 +254,51 @@ For a single task:
 Current User Context:
 ${JSON.stringify({ userProfile, tasks: tasks.map(t => ({ id: t.id, title: t.title, startTime: t.startTime, endTime: t.endTime, status: t.status })), prayerTimings, weather, currentLocalTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }, null, 2)}`;
 
-        const formattedContents = newMessages.map(m => ({
-          role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content }]
-        }));
+      const chatPrompt = newMessages
+        .slice(-8)
+        .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+        .join('\n') + '\nAssistant:';
 
-        const directRes = await fetch(directUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: formattedContents,
-            systemInstruction: {
-              parts: [{ text: systemInstruction }]
-            }
-          })
+      try {
+        replyText = await callGeminiWithFallback(chatPrompt, {
+          systemInstruction,
+          customApiKey: customApiKey || undefined,
+          userProfile
         });
+      } catch (geminiErr: any) {
+        console.warn('callGeminiWithFallback failed, trying /api/chat fallback:', geminiErr);
+        try {
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mode: 'assistant',
+              customApiKey: customApiKey || undefined,
+              messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+              context: {
+                userProfile,
+                tasks: tasks.map(t => ({ id: t.id, title: t.title, startTime: t.startTime, endTime: t.endTime, status: t.status })),
+                prayerTimings,
+                weather,
+                currentLocalTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              }
+            }),
+          });
 
-        if (!directRes.ok) {
-          const directErrText = await directRes.text();
-          let directErrMsg = `Direct Gemini API error (${directRes.status})`;
-          try {
-            const parsedErr = JSON.parse(directErrText);
-            directErrMsg = parsedErr.error?.message || directErrMsg;
-          } catch {}
-          throw new Error(directErrMsg);
+          if (res.ok) {
+            const resText = await res.text();
+            if (resText && resText.trim()) {
+              const data = JSON.parse(resText);
+              replyText = data.reply || '';
+            } else {
+              throw geminiErr;
+            }
+          } else {
+            throw geminiErr;
+          }
+        } catch {
+          throw geminiErr;
         }
-
-        const directData = await directRes.json();
-        replyText = directData.candidates?.[0]?.content?.parts?.[0]?.text || 'I am ready to assist you.';
       }
 
       // Parse potential json_action block
@@ -432,14 +415,11 @@ ${JSON.stringify({ userProfile, tasks: tasks.map(t => ({ id: t.id, title: t.titl
     } catch (err: any) {
       console.error('Floating assistant error:', err);
       const errMsg = err.message || 'Error communicating with Gemini AI.';
-      const isFreeUser = userProfile.tier === 'free' && userProfile.email !== 'chaqeelpak@gmail.com';
-      const helpNotice = isFreeUser
-        ? 'Please try again in a few moments.'
-        : 'If you haven\'t saved your Gemini API Key, please click the **🔑 API Key** button in the header above to enter your key.';
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `⚠️ **SyncMate AI Notice:** ${errMsg}\n\n${helpNotice}`,
+        content: `⚠️ ${errMsg}`,
+        isError: true,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages([...newMessages, aiMsg]);
@@ -689,6 +669,8 @@ Once you confirm, I will place it in your schedule with a proactive prep tip!`,
               className={`max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed ${
                 m.role === 'user'
                   ? 'bg-indigo-600 text-white rounded-tr-none'
+                  : m.isError
+                  ? 'bg-red-50 dark:bg-red-950/80 text-red-700 dark:text-red-200 border border-red-200 dark:border-red-800 shadow-sm rounded-tl-none'
                   : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700/80 shadow-sm rounded-tl-none'
               }`}
             >
