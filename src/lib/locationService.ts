@@ -1,6 +1,8 @@
 import { UserLocation } from './types';
 import { db, saveUserProfile, getUserProfile } from './firebase';
 import { doc, updateDoc } from 'firebase/firestore';
+import { Capacitor } from '@capacitor/core';
+import { Geolocation } from '@capacitor/geolocation';
 
 /**
  * Reverse-geocode latitude & longitude to exact neighbourhood/suburb & city name using OpenStreetMap Nominatim
@@ -67,7 +69,10 @@ export async function reverseGeocode(lat: number, lng: number): Promise<{
  * Helper to trigger toast notification for location permission or error
  */
 export function triggerLocationPermissionToast(msg?: string) {
-  const toastMsg = msg || '⚠️ GPS Permission Required for accurate location. Please enable location access in your browser settings.';
+  const defaultMsg = Capacitor.isNativePlatform()
+    ? '⚠️ GPS Permission Required. Please enable Location in your Android Device Settings.'
+    : '⚠️ GPS Permission Required for accurate location. Please enable location access in your device settings.';
+  const toastMsg = msg || defaultMsg;
   if (typeof window !== 'undefined') {
     window.dispatchEvent(
       new CustomEvent('syncmate_toast', {
@@ -78,12 +83,65 @@ export function triggerLocationPermissionToast(msg?: string) {
 }
 
 /**
- * Request high-accuracy GPS hardware positioning from HTML5 navigator.geolocation
+ * Request high-accuracy GPS hardware positioning via @capacitor/geolocation on native or navigator.geolocation on web
  */
 export async function getExactDeviceLocation(): Promise<UserLocation> {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const permissions = await Geolocation.checkPermissions();
+      if (permissions.location !== 'granted' && permissions.coarseLocation !== 'granted') {
+        const req = await Geolocation.requestPermissions();
+        if (req.location !== 'granted' && req.coarseLocation !== 'granted') {
+          triggerLocationPermissionToast(
+            '⚠️ GPS Permission Required. Please enable Location in your Android Device Settings.'
+          );
+          throw new Error('Location permission denied on Android device');
+        }
+      }
+
+      const position = await Geolocation.getCurrentPosition({
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+      });
+
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
+
+      try {
+        const geocoded = await reverseGeocode(latitude, longitude);
+        return {
+          latitude,
+          longitude,
+          areaLabel: geocoded.areaLabel,
+          city: geocoded.areaLabel || geocoded.city,
+          country: geocoded.country,
+          updatedAt: new Date().toISOString()
+        };
+      } catch (err) {
+        return {
+          latitude,
+          longitude,
+          areaLabel: `${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°`,
+          city: `${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°`,
+          updatedAt: new Date().toISOString()
+        };
+      }
+    } catch (err) {
+      console.warn('Capacitor Geolocation error:', err);
+      triggerLocationPermissionToast(
+        '⚠️ GPS Permission Required. Please enable Location in your Android Device Settings.'
+      );
+      throw err;
+    }
+  }
+
+  // Fallback for Web platform
   if (typeof window === 'undefined' || !('geolocation' in navigator)) {
-    triggerLocationPermissionToast();
-    throw new Error('Geolocation is not supported by your browser');
+    triggerLocationPermissionToast(
+      '⚠️ GPS Permission Required for accurate location. Please enable location access in your device settings.'
+    );
+    throw new Error('Geolocation is not supported by your device');
   }
 
   const options: PositionOptions = {
@@ -125,7 +183,7 @@ export async function getExactDeviceLocation(): Promise<UserLocation> {
       (error) => {
         console.warn('GPS position acquisition error or denied:', error);
         triggerLocationPermissionToast(
-          '⚠️ GPS Permission Required for accurate location. Please enable location access in your browser settings.'
+          '⚠️ GPS Permission Required for accurate location. Please enable location access in your device settings.'
         );
         reject(error);
       },

@@ -13,7 +13,31 @@ import {
 import { UserProfile, PrayerTimings } from '../types';
 import { getEmotionalIslamicInsight, QuranAyahData, HadithData } from '../lib/islamicApiService';
 import { deductUserCredits, getFeatureCreditCost } from '../lib/creditService';
+import { schedulePrayerReminder } from '../lib/notificationService';
 import { IslamicInsightModal } from './IslamicInsightModal';
+
+function parsePrayerTimeToDate(timeStr: string): Date | null {
+  if (!timeStr) return null;
+  const now = new Date();
+  const timeClean = timeStr.trim().toUpperCase();
+
+  let hours = 0;
+  let minutes = 0;
+
+  const isPm = timeClean.includes('PM');
+  const isAm = timeClean.includes('AM');
+  const rawTime = timeClean.replace(/AM|PM/g, '').trim();
+  const parts = rawTime.split(':');
+  if (parts.length < 2) return null;
+
+  hours = parseInt(parts[0], 10);
+  minutes = parseInt(parts[1], 10);
+
+  if (isPm && hours < 12) hours += 12;
+  if (isAm && hours === 12) hours = 0;
+
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
+}
 
 interface PrayerHadithViewProps {
   userProfile: UserProfile | null;
@@ -27,6 +51,28 @@ export const PrayerHadithView: React.FC<PrayerHadithViewProps> = ({
   const [quranData, setQuranData] = useState<QuranAyahData | null>(null);
   const [hadithData, setHadithData] = useState<HadithData | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+
+  // Schedule native prayer notifications whenever prayer timings are fetched/loaded
+  useEffect(() => {
+    if (prayerTimings) {
+      const prayers = [
+        { name: 'Fajr', timeStr: prayerTimings.Fajr },
+        { name: 'Dhuhr', timeStr: prayerTimings.Dhuhr },
+        { name: 'Asr', timeStr: prayerTimings.Asr },
+        { name: 'Maghrib', timeStr: prayerTimings.Maghrib },
+        { name: 'Isha', timeStr: prayerTimings.Isha },
+      ];
+
+      prayers.forEach(({ name, timeStr }) => {
+        if (timeStr) {
+          const dateObj = parsePrayerTimeToDate(timeStr);
+          if (dateObj) {
+            schedulePrayerReminder(name, dateObj).catch(console.warn);
+          }
+        }
+      });
+    }
+  }, [prayerTimings]);
 
   // Completed Prayers State (persisted in localStorage by date_prayerKey)
   const todayStr = new Date().toISOString().split('T')[0];

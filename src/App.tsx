@@ -47,10 +47,13 @@ import { checkIsBirthday } from './lib/birthdayUtils';
 import { processUserSubscriptionLifecycle, processBirthdayBonusAsync } from './lib/subscriptionService';
 import { captureReferralCode, processReferralReward } from './lib/referralService';
 import { requestNotificationPermissions } from './lib/notificationService';
+import { useNativePermissions } from './hooks/useNativePermissions';
 
 import { Calendar, Target, Bot, Sparkles, Loader2, Timer, MapPin, Sun } from 'lucide-react';
 
 export default function App() {
+  useNativePermissions();
+
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
