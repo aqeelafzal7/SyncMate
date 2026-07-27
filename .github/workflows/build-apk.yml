@@ -21,7 +21,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       # 3. Setup Java 17 for Gradle Android compilation
       - name: ☕ Setup Java JDK 17
@@ -36,7 +35,7 @@ jobs:
 
       # 5. Install project dependencies
       - name: 📦 Install Dependencies
-        run: npm ci
+        run: npm install
 
       # 6. Build production web bundle (Vite dist)
       - name: 🛠️ Build Web Bundle
@@ -52,7 +51,7 @@ jobs:
 
       # 8. Grant execute permission for Gradle wrapper
       - name: 🔑 Chmod Gradle Wrapper
-        run: chmod +x android/gradlew
+        run: chmod +x android/gradlew || true
 
       # 9. Build Debug APK using Gradle
       - name: 🏗️ Compile Android APK
