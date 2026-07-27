@@ -38,9 +38,11 @@ jobs:
         run: npm install
 
       # 6. Build production web bundle (Vite dist)
+      # 6. Build production web bundle (Vite dist)
       - name: 🛠️ Build Web Bundle
         env:
           VITE_GEMINI_SYSTEM_API_KEY: ${{ secrets.VITE_GEMINI_SYSTEM_API_KEY }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
         run: npm run build
 
       # 7. Add & Sync Capacitor Android project
