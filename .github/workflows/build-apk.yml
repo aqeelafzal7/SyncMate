@@ -44,9 +44,10 @@ jobs:
         run: npm run build
 
       # 7. Add & Sync Capacitor Android project
-      - name: 🔄 Capacitor Sync Android
+      - name: 🔄 Capacitor Sync Android & Icons
         run: |
           npx cap add android || true
+          npx @capacitor/assets generate --android || true
           npx cap copy android
           npx cap sync android
 
