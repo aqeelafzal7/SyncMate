@@ -3,7 +3,8 @@ import { Sparkles, Share2, Download, Cake, Award, PartyPopper } from 'lucide-rea
 import { toPng } from 'html-to-image';
 import confetti from 'canvas-confetti';
 import { UserProfile, Task } from '../types';
-import { getDecryptedApiKey } from '../lib/cryptoStorage';
+import { callGeminiWithFallback } from '../lib/geminiService';
+import { deductUserCredits } from '../lib/creditService';
 
 interface BirthdayCardProps {
   userProfile: UserProfile;
@@ -24,6 +25,118 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
     ? `🏆 ${completedTasksCount} Focus Tasks Completed This Year!` 
     : `🏆 100+ Productivity Milestone Sessions Accomplished!`;
 
+  // Synthesize dynamic AI birthday wish based on user's actual profile fields
+  const fetchWish = async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    setLoading(true);
+
+    const currentYear = new Date().getFullYear();
+    const cacheKey = `syncmate_birthday_wish_locked_${currentYear}`;
+
+    // Extract dynamic fields safely from userProfile
+    const userName = userProfile.name || 'Friend';
+    const userOccupation = userProfile.occupation || 'your domain';
+    const userGoals = Array.isArray(userProfile.goals) 
+      ? userProfile.goals.filter(Boolean).join(', ') 
+      : (userProfile.goals || 'achieving career excellence');
+
+    const userContextData = JSON.stringify({
+      name: userProfile.name || 'Friend',
+      occupation: userProfile.occupation,
+      goals: userProfile.goals,
+      bio: userProfile.bio,
+      interests: userProfile.interests,
+      recentCompletedTasks: tasks.filter(t => t.status === 'completed').slice(-5).map(t => t.title),
+      activeProjects: tasks.filter(t => t.status !== 'completed').slice(-5).map(t => t.title)
+    }, null, 2);
+
+    // Dynamic generic fallback wish tailored using template literals
+    const fallbackWish = `Happy Birthday, ${userName}! May this year bring extraordinary breakthroughs and milestone achievements in ${userOccupation}. May every project and habit move you closer to your goals of ${userGoals}. Wishing you health, boundless energy, and continuous success! — From your Autonomous Assistant, SyncMate ⚡`;
+
+    const aiPrompt = `Act as an elite Autonomous Assistant and Master Metaphor Weaver for SyncMate.
+
+Analyze the following raw user profile and activity JSON data:
+${userContextData}
+
+YOUR TASK:
+1. Deeply analyze the user's field, occupation, bio, goals, and recent activity in the app.
+2. Identify their unique domain, core passions, and personal identity from the raw data.
+3. Synthesize a powerful 3-to-4 sentence birthday reflection built around an original, creative domain metaphor intrinsic to their specific background and pursuits. Bridge their real-world domain with their daily progress and ambitions.
+4. Avoid all generic birthday clichés. Make every word feel bespoke and deeply connected to their mind and actions.
+5. Signature: End with "— From your Autonomous Assistant, SyncMate ⚡". Do NOT wrap output in quotes or markdown headers.`;
+
+    try {
+      // Direct client-side call to Gemini engine passing profile context
+      const responseText = await callGeminiWithFallback(aiPrompt, { userProfile });
+
+      if (responseText && responseText.trim().length > 15) {
+        const cleanWish = responseText.trim().replace(/^["']|["']$/g, '');
+        localStorage.setItem(cacheKey, cleanWish);
+        setWish(cleanWish);
+        setLoading(false);
+        fetchingRef.current = false;
+        return;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch AI birthday wish (using cached fallback):', err);
+    }
+
+    // Save dynamic fallback to localStorage so it stays locked permanently for the year
+    try {
+      localStorage.setItem(cacheKey, fallbackWish);
+    } catch (e) {
+      console.warn('Failed to save fallback wish to localStorage:', e);
+    }
+    setWish(fallbackWish);
+    setLoading(false);
+    fetchingRef.current = false;
+  };
+
+  const handleRegenerate = async () => {
+    if (loading) return;
+
+    const isAdmin = userProfile?.isAdmin || userProfile?.role === 'admin';
+    const isByok = !!(userProfile?.customApiKey);
+    const currentCredits = userProfile?.dailyCredits ?? 6;
+
+    if (!isAdmin && !isByok && currentCredits < 7) {
+      window.dispatchEvent(
+        new CustomEvent('syncmate_toast', {
+          detail: {
+            message: '⚡ Insufficient Daily Credits! Regenerating a full AI profile deep-analysis wish costs 7 Credits.',
+            type: 'warning'
+          }
+        })
+      );
+      return;
+    }
+
+    if (!isAdmin && !isByok) {
+      const success = await deductUserCredits(7);
+      if (!success) return;
+    }
+
+    // Purge all legacy/locked birthday wish items from localStorage
+    Object.keys(localStorage).forEach((key) => {
+      if (key.includes('syncmate_birthday_wish')) {
+        localStorage.removeItem(key);
+      }
+    });
+
+    fetchingRef.current = false;
+    await fetchWish();
+
+    window.dispatchEvent(
+      new CustomEvent('syncmate_toast', {
+        detail: {
+          message: '🎉 Fresh AI wish generated! (-7 Credits)',
+          type: 'success'
+        }
+      })
+    );
+  };
+
   useEffect(() => {
     // Trigger festive confetti burst on mount
     try {
@@ -37,64 +150,18 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
     }
 
     const currentYear = new Date().getFullYear();
-    // Purge old cache key to clear any legacy duplicated wishes
-    localStorage.removeItem(`syncmate_birthday_wish_${currentYear}`);
-    const cacheKey = `syncmate_birthday_wish_v2_${currentYear}`;
+    const cacheKey = `syncmate_birthday_wish_locked_${currentYear}`;
     const cachedWish = localStorage.getItem(cacheKey);
 
+    // 1. If wish already exists in cache, lock it and NEVER re-fetch!
     if (cachedWish) {
       setWish(cachedWish);
       setLoading(false);
       return;
     }
 
-    // Fetch AI Birthday wish with cache & fallback
-    const fetchWish = async () => {
-      if (fetchingRef.current) return;
-      fetchingRef.current = true;
-      setLoading(true);
-      const fallbackWish = `May your cellular pathways align with exponential growth, boundless energy, and continuous breakthrough achievements. Happy Birthday Dear ${userProfile.name}, wish you all the best and continued success! — From your Autonomous Assistant, SyncMate ⚡`;
-
-      try {
-        const customApiKey = (await getDecryptedApiKey()) || undefined;
-        const res = await fetch('/api/birthday-wish', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: userProfile.name,
-            occupation: userProfile.occupation,
-            goals: userProfile.goals,
-            customApiKey
-          })
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data.wish) {
-            localStorage.setItem(cacheKey, data.wish);
-            setWish(data.wish);
-            setLoading(false);
-            fetchingRef.current = false;
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to fetch birthday wish (using cached fallback):', err);
-      }
-
-      // Fallback wish on 429 error or quota limits
-      try {
-        localStorage.setItem(cacheKey, fallbackWish);
-      } catch (e) {
-        console.warn('Failed to save fallback wish to localStorage:', e);
-      }
-      setWish(fallbackWish);
-      setLoading(false);
-      fetchingRef.current = false;
-    };
-
     fetchWish();
-  }, [userProfile.name, userProfile.occupation]);
+  }, [userProfile]);
 
   const handleShare = async () => {
     const shareText = `Just got the most personalized birthday wish from my AI Assistant, SyncMate! ⚡ Proud of my Year in Review stats (${focusSessionsText}). Building better habits one day at a time! #SyncMate #AutonomousAssistant`;
@@ -112,7 +179,6 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
       }
     }
 
-    // Fallback: Copy to clipboard
     try {
       await navigator.clipboard.writeText(shareText);
       setSharedToast(true);
@@ -141,7 +207,7 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
       });
       
       const link = document.createElement('a');
-      link.download = `SyncMate_Birthday_Card_${userProfile.name.replace(/\s+/g, '_')}.png`;
+      link.download = `SyncMate_Birthday_Card_${(userProfile.name || 'User').replace(/\s+/g, '_')}.png`;
       link.href = dataUrl;
       link.click();
     } catch (err) {
@@ -193,7 +259,7 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
 
             <div className="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-bold">
               <Cake className="w-4 h-4 text-amber-400 animate-bounce" />
-              <span>Happy Birthday, {userProfile.name}! 🎂</span>
+              <span>Happy Birthday, {userProfile.name || 'Friend'}! 🎂</span>
             </div>
           </div>
 
@@ -208,7 +274,7 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
             {loading ? (
               <div className="flex items-center space-x-3 text-amber-300 animate-pulse">
                 <Sparkles className="w-5 h-5 animate-spin" />
-                <span>SyncMate is synthesizing your personalized field-specific birthday wish...</span>
+                <span>SyncMate is synthesizing your personalized birthday wish...</span>
               </div>
             ) : (
               <p className="font-medium whitespace-pre-line tracking-wide">
@@ -219,6 +285,15 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
 
           {/* Action Controls: Share & Download */}
           <div className="birthday-action-buttons flex flex-wrap items-center justify-end gap-3 pt-2">
+            <button
+              onClick={handleRegenerate}
+              disabled={loading}
+              className="px-4 py-2.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/40 text-purple-200 font-bold text-xs shadow-lg flex items-center space-x-2 transition-all transform active:scale-95 disabled:opacity-50"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-spin" />
+              <span>{loading ? 'Analyzing Profile...' : '🔄 Regenerate Wish (7 ⚡)'}</span>
+            </button>
+
             <button
               onClick={handleShare}
               className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 flex items-center space-x-2 transition-all transform active:scale-95"
