@@ -15,10 +15,13 @@ import {
   MessageSquare,
   Gift,
   ArrowRight,
-  AlertCircle
+  AlertCircle,
+  Users,
+  Copy
 } from 'lucide-react';
 import { UserProfile, SubscriptionTier } from '../types';
 import { addSubscriptionRequestToFirestore } from '../lib/firebase';
+import { getUserReferralStats } from '../lib/referralService';
 
 interface BuySubscriptionViewProps {
   userProfile: UserProfile | null;
@@ -35,6 +38,26 @@ export const BuySubscriptionView: React.FC<BuySubscriptionViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmittedSuccess, setIsSubmittedSuccess] = useState<boolean>(false);
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
+
+  const referralStats = getUserReferralStats(userProfile);
+
+  const handleCopyReferral = async () => {
+    try {
+      await navigator.clipboard.writeText(referralStats.referralLink);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    } catch {
+      const textArea = document.createElement('textarea');
+      textArea.value = referralStats.referralLink;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    }
+  };
 
   const plans = [
     {
@@ -404,6 +427,63 @@ export const BuySubscriptionView: React.FC<BuySubscriptionViewProps> = ({
           </form>
         </div>
       )}
+
+      {/* 🎁 Referral & Reward System Card */}
+      <div className="bg-gradient-to-br from-purple-950/70 via-indigo-950/80 to-slate-900 border border-purple-500/30 rounded-3xl p-6 shadow-2xl backdrop-blur-xl mb-8 text-white relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+          <Gift className="w-32 h-32 text-purple-400" />
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+          <div className="space-y-2 max-w-xl">
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-400/40 text-purple-300 text-xs font-bold">
+              <Gift className="w-3.5 h-3.5 text-pink-400" />
+              <span>Referral Rewards Engine</span>
+            </div>
+            <h3 className="text-xl font-extrabold text-white flex items-center gap-2">
+              <span>🎁 Invite Friends, Earn Credits</span>
+            </h3>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Share your personal invite link with friends, family, or colleagues. Every time a friend signs up using your link, both of you instantly receive <strong className="text-amber-300 font-bold">+10 Bonus Daily Credits!</strong>
+            </p>
+          </div>
+
+          {/* Stats Counters */}
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="bg-slate-900/80 border border-purple-500/20 px-4 py-3 rounded-2xl text-center min-w-[100px]">
+              <span className="block text-xl font-black text-purple-300">{referralStats.totalReferrals}</span>
+              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Referrals</span>
+            </div>
+            <div className="bg-slate-900/80 border border-amber-500/20 px-4 py-3 rounded-2xl text-center min-w-[100px]">
+              <span className="block text-xl font-black text-amber-300">+{referralStats.earnedCredits} ⚡</span>
+              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Credits Earned</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Copy Link Input Bar */}
+        <div className="mt-5 pt-4 border-t border-purple-500/20 flex flex-col sm:flex-row items-center gap-2.5 relative z-10">
+          <div className="w-full bg-slate-950/80 border border-slate-800 rounded-2xl px-4 py-3 text-xs font-mono text-purple-200 truncate select-all flex items-center justify-between">
+            <span className="truncate">{referralStats.referralLink}</span>
+          </div>
+          <button
+            onClick={handleCopyReferral}
+            className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-lg shadow-purple-600/30 flex items-center justify-center space-x-2 transition-all shrink-0 active:scale-95"
+          >
+            {copiedLink ? (
+              <>
+                <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                <span>Copied! 🎉</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-4 h-4 text-purple-200" />
+                <span>📋 Copy Link</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
 
       {/* Information Grid / FAQ */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-800/60">

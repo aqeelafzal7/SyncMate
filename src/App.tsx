@@ -42,8 +42,11 @@ import { DobCollectionModal } from './components/DobCollectionModal';
 import { BirthdayBalloonsOverlay } from './components/BirthdayBalloonsOverlay';
 import { BirthdayRewardModal } from './components/BirthdayRewardModal';
 import { PrayerHadithView } from './components/PrayerHadithView';
+import { AppDownloadBanner } from './components/AppDownloadBanner';
 import { checkIsBirthday } from './lib/birthdayUtils';
 import { processUserSubscriptionLifecycle, processBirthdayBonusAsync } from './lib/subscriptionService';
+import { captureReferralCode, processReferralReward } from './lib/referralService';
+import { requestNotificationPermissions } from './lib/notificationService';
 
 import { Calendar, Target, Bot, Sparkles, Loader2, Timer, MapPin, Sun } from 'lucide-react';
 
@@ -80,6 +83,9 @@ export default function App() {
   const [globalToast, setGlobalToast] = useState<{ message: string; type: 'warning' | 'info' | 'success' } | null>(null);
 
   useEffect(() => {
+    captureReferralCode();
+    requestNotificationPermissions().catch(console.warn);
+
     const handleToastEvent = (e: Event) => {
       const customEv = e as CustomEvent<{ message: string; type: 'warning' | 'info' | 'success' }>;
       if (customEv.detail && customEv.detail.message) {
@@ -153,6 +159,7 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
       if (user) {
+        processReferralReward(user.uid).catch(console.warn);
         const profile = await getUserProfile(user.uid);
         if (profile) {
           const activeMood = profile.activeMood || 'neutral';
@@ -444,6 +451,9 @@ export default function App() {
   // Main Executive Lifestyle OS Layout
   return (
     <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
+      
+      {/* Mobile Web APK Download Banner */}
+      <AppDownloadBanner />
       
       {/* Floating Global Toast Banner */}
       {globalToast && (

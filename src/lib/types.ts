@@ -47,6 +47,8 @@ export interface UserProfile {
   whatsappNumber?: string;
   deviceInfo?: DeviceInfo;
   lastBirthdayBonusYear?: number;
+  referralCount?: number;
+  referredBy?: string;
 }
 
 export interface SubscriptionRequest {
