@@ -447,7 +447,7 @@ export default function App() {
       
       {/* Floating Global Toast Banner */}
       {globalToast && (
-        <div className="fixed top-4 right-4 z-50 max-w-md p-4 rounded-2xl bg-amber-950/90 border border-amber-500/40 text-amber-200 text-xs font-bold shadow-2xl flex items-center space-x-3 backdrop-blur-md animate-fadeIn">
+        <div className="fixed top-20 right-4 z-[9999] max-w-md p-4 rounded-2xl bg-amber-950/90 border border-amber-500/40 text-amber-200 text-xs font-bold shadow-2xl flex items-center space-x-3 backdrop-blur-md animate-fadeIn">
           <span className="shrink-0 text-base">⚠️</span>
           <span className="flex-1 leading-relaxed">{globalToast.message}</span>
           <button 

@@ -1,5 +1,5 @@
 import { auth, db, getUserProfile } from './firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, setDoc, increment } from 'firebase/firestore';
 import { getTierDefaultCredits } from './subscriptionService';
 
 export type FeatureType = 'todo' | 'project' | 'my_look' | 'today_wear' | 'prayer_quran_hadith';
@@ -33,6 +33,26 @@ export function triggerCreditToast(msg?: string) {
 }
 
 /**
+ * Logs credit consumption to system_analytics/${todayDate} in Firestore
+ */
+async function logCreditConsumption(cost: number) {
+  if (cost <= 0) return;
+  try {
+    const todayDate = new Date().toISOString().split('T')[0];
+    await setDoc(
+      doc(db, 'system_analytics', todayDate),
+      {
+        totalCreditsConsumed: increment(cost),
+        lastUpdated: new Date().toISOString()
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('Failed to update system analytics for credit consumption:', err);
+  }
+}
+
+/**
  * Deducts user credits in Firestore & localStorage cache.
  * Returns true if deduction was successful, false if credits are insufficient.
  */
@@ -55,11 +75,13 @@ export async function deductUserCredits(cost: number, userId?: string): Promise<
         localProf.dailyCredits = currentCredits - cost;
         localStorage.setItem('syncmate_user_profile', JSON.stringify(localProf));
         window.dispatchEvent(new CustomEvent('syncmate_profile_updated', { detail: localProf }));
+        logCreditConsumption(cost);
         return true;
       } catch {
         // pass
       }
     }
+    logCreditConsumption(cost);
     return true;
   }
 
@@ -83,6 +105,7 @@ export async function deductUserCredits(cost: number, userId?: string): Promise<
     localStorage.setItem(`syncmate_user_${uid}`, JSON.stringify(updatedProfile));
     window.dispatchEvent(new CustomEvent('syncmate_profile_updated', { detail: updatedProfile }));
 
+    logCreditConsumption(cost);
     return true;
   } catch (err) {
     console.warn('deductUserCredits Firestore error, using local fallback:', err);
@@ -98,11 +121,13 @@ export async function deductUserCredits(cost: number, userId?: string): Promise<
         parsed.dailyCredits = currentCredits - cost;
         localStorage.setItem(`syncmate_user_${uid}`, JSON.stringify(parsed));
         window.dispatchEvent(new CustomEvent('syncmate_profile_updated', { detail: parsed }));
+        logCreditConsumption(cost);
         return true;
       } catch {
         // pass
       }
     }
+    logCreditConsumption(cost);
     return true;
   }
 }

@@ -155,7 +155,7 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
     <div className="relative my-6 animate-fadeIn">
       {/* Toast Notification */}
       {sharedToast && (
-        <div className="fixed top-20 right-6 z-50 bg-emerald-600 text-white px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold flex items-center space-x-2 animate-bounce">
+        <div className="fixed top-20 right-6 z-[9999] bg-emerald-600 text-white px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold flex items-center space-x-2 animate-bounce">
           <PartyPopper className="w-4 h-4" />
           <span>Copied birthday post text to clipboard! Ready to paste!</span>
         </div>

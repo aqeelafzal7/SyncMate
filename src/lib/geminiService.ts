@@ -1,4 +1,22 @@
 import { getDecryptedApiKey } from './cryptoStorage';
+import { db } from './firebase';
+import { doc, setDoc, increment } from 'firebase/firestore';
+
+async function logSystemApiCall() {
+  try {
+    const todayDate = new Date().toISOString().split('T')[0];
+    await setDoc(
+      doc(db, 'system_analytics', todayDate),
+      {
+        totalApiCallsToday: increment(1),
+        lastUpdated: new Date().toISOString()
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('Failed to log system API call to analytics:', err);
+  }
+}
 
 const GEMINI_MODELS = [
   'gemini-2.5-flash',
@@ -179,6 +197,7 @@ export async function callGeminiWithFallback(
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (text) {
+          logSystemApiCall();
           return text;
         }
       }

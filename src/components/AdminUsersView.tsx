@@ -10,10 +10,12 @@ import {
   Key, 
   PartyPopper, 
   Sparkles,
-  Award
+  Award,
+  Activity
 } from 'lucide-react';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { UserProfile } from '../types';
-import { getAllUsersFromFirestore } from '../lib/firebase';
+import { db, getAllUsersFromFirestore } from '../lib/firebase';
 import { checkIsBirthday } from '../lib/birthdayUtils';
 import { UserInspectorModal } from './UserInspectorModal';
 
@@ -26,6 +28,12 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ onRefreshStats }
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   
+  // Real-time analytics state
+  const [analyticsData, setAnalyticsData] = useState<{
+    totalCreditsConsumed: number;
+    totalApiCallsToday: number;
+  }>({ totalCreditsConsumed: 0, totalApiCallsToday: 0 });
+
   // Selected user for Inspector Modal
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(false);
@@ -46,6 +54,31 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ onRefreshStats }
     fetchUsers();
   }, []);
 
+  // Real-time listener for system_analytics/${todayDate}
+  useEffect(() => {
+    const todayDate = new Date().toISOString().split('T')[0];
+    const analyticsDocRef = doc(db, 'system_analytics', todayDate);
+    const unsubscribe = onSnapshot(
+      analyticsDocRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          setAnalyticsData({
+            totalCreditsConsumed: data.totalCreditsConsumed || 0,
+            totalApiCallsToday: data.totalApiCallsToday || 0,
+          });
+        } else {
+          setAnalyticsData({ totalCreditsConsumed: 0, totalApiCallsToday: 0 });
+        }
+      },
+      (err) => {
+        console.warn('Real-time listener on system_analytics error:', err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
   const handleInspect = (user: UserProfile) => {
     setSelectedUser(user);
     setIsInspectorOpen(true);
@@ -62,7 +95,12 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ onRefreshStats }
 
   const totalUsersCount = users.length;
   const premiumCount = users.filter(u => u.tier === 'premium' || u.tier === 'spark' || u.tier === 'extra_premium').length;
-  const totalCreditsGranted = users.reduce((acc, u) => acc + (u.dailyCredits || 6), 0);
+  const totalAllocatedPool = users.reduce((acc, u) => acc + (u.dailyCredits || 6), 0);
+  const creditsConsumedToday = analyticsData.totalCreditsConsumed || 0;
+  const totalApiCallsToday = analyticsData.totalApiCallsToday || 0;
+  const usagePercentage = totalAllocatedPool > 0
+    ? Math.min(100, Math.round((creditsConsumedToday / totalAllocatedPool) * 100))
+    : 0;
 
   const getTierBadge = (tier?: string) => {
     switch (tier) {
@@ -99,34 +137,63 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ onRefreshStats }
   return (
     <div className="space-y-6">
       {/* Top Banner & Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 flex items-center space-x-4 shadow-lg">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-            <Users className="w-6 h-6" />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Card 1: User Directory */}
+        <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-between shadow-lg">
+          <div className="flex items-center space-x-4">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">User Directory</span>
+              <span className="text-2xl font-black text-white">{totalUsersCount} Users</span>
+            </div>
           </div>
-          <div>
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Registered Users</span>
-            <span className="text-2xl font-black text-white">{totalUsersCount}</span>
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40 inline-flex items-center space-x-1 shrink-0">
+            <Crown className="w-3 h-3 text-purple-400" />
+            <span>{premiumCount} Subscribed</span>
+          </span>
+        </div>
+
+        {/* Card 2: Daily Credit Consumption */}
+        <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-2 shadow-lg flex flex-col justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-600/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+              <Zap className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Daily Credit Consumption</span>
+              <span className="text-xl font-black text-white">{creditsConsumedToday} / {totalAllocatedPool} Used</span>
+            </div>
+          </div>
+          <div className="space-y-1 pt-1">
+            <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800/80">
+              <div 
+                className="bg-gradient-to-r from-emerald-500 via-teal-400 to-amber-400 h-full transition-all duration-500 rounded-full" 
+                style={{ width: `${usagePercentage}%` }} 
+              />
+            </div>
+            <span className="text-[10px] font-extrabold text-slate-400 block text-right">
+              {usagePercentage}% Pool Consumed
+            </span>
           </div>
         </div>
 
-        <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 flex items-center space-x-4 shadow-lg">
-          <div className="w-12 h-12 rounded-2xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
-            <Crown className="w-6 h-6" />
+        {/* Card 3: Real-Time API Health */}
+        <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-2 shadow-lg flex flex-col justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-2xl bg-cyan-600/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+              <Activity className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Real-Time API Health</span>
+              <span className="text-xl font-black text-white">{totalApiCallsToday} System API Requests</span>
+            </div>
           </div>
-          <div>
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">Pro / Subscribed Members</span>
-            <span className="text-2xl font-black text-white">{premiumCount}</span>
-          </div>
-        </div>
-
-        <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 flex items-center space-x-4 shadow-lg">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-600/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-            <Zap className="w-6 h-6" />
-          </div>
-          <div>
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">Daily Credits Pool</span>
-            <span className="text-2xl font-black text-white">{totalCreditsGranted.toLocaleString()}</span>
+          <div className="pt-1">
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 inline-flex items-center space-x-1">
+              <span>🟢 System Key Active (Cloudflare Env)</span>
+            </span>
           </div>
         </div>
       </div>

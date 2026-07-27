@@ -262,7 +262,7 @@ export const AdminSubscriptionQueue: React.FC<AdminSubscriptionQueueProps> = ({ 
     <div className="space-y-6 max-w-7xl mx-auto pb-12 animate-fadeIn">
       {/* Toast Notification Banner */}
       {toastMessage && (
-        <div className="fixed top-5 right-5 z-50 p-4 rounded-2xl bg-emerald-950 border border-emerald-500/50 text-emerald-200 text-xs font-bold shadow-2xl flex items-center space-x-3 animate-bounce">
+        <div className="fixed top-20 right-5 z-[9999] p-4 rounded-2xl bg-emerald-950 border border-emerald-500/50 text-emerald-200 text-xs font-bold shadow-2xl flex items-center space-x-3 animate-bounce">
           <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
           <span>{toastMessage}</span>
           <button onClick={() => setToastMessage(null)} className="ml-2 text-emerald-400 hover:text-white">
