@@ -11,6 +11,29 @@ interface BirthdayCardProps {
   tasks: Task[];
 }
 
+// Helper function to sanitize raw profile traits and remove first-person declarations
+const sanitizeTrait = (text: string | undefined | null): string => {
+  if (!text) return '';
+  let cleaned = String(text).trim();
+
+  // Remove leading first-person declarations like "I'm a", "I'm", "I am a", "I am", "My", etc.
+  cleaned = cleaned.replace(/^I'm\s+a\s+/i, '');
+  cleaned = cleaned.replace(/^I'm\s+/i, '');
+  cleaned = cleaned.replace(/^I\s+am\s+a\s+/i, '');
+  cleaned = cleaned.replace(/^I\s+am\s+/i, '');
+  cleaned = cleaned.replace(/^My\s+/i, '');
+  cleaned = cleaned.replace(/^I\s+/i, '');
+
+  // Replace internal first-person phrases with third-person / natural terms
+  cleaned = cleaned.replace(/\bI'm\b/gi, 'being');
+  cleaned = cleaned.replace(/\bI am\b/gi, 'being');
+  cleaned = cleaned.replace(/\bmy\b/gi, 'their');
+  cleaned = cleaned.replace(/\bme\b/gi, 'them');
+  cleaned = cleaned.replace(/\bmine\b/gi, 'theirs');
+
+  return cleaned.trim();
+};
+
 export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }) => {
   const [wish, setWish] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
@@ -34,37 +57,43 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ userProfile, tasks }
     const currentYear = new Date().getFullYear();
     const cacheKey = `syncmate_birthday_wish_locked_${currentYear}`;
 
-    // Extract dynamic fields safely from userProfile
-    const userName = userProfile.name || 'Friend';
-    const userOccupation = userProfile.occupation || 'your domain';
+    // Extract and sanitize dynamic traits safely from userProfile
+    const userName = sanitizeTrait(userProfile.name) || userProfile.name || 'Friend';
+    const userOccupation = sanitizeTrait(userProfile.occupation);
     const userGoals = Array.isArray(userProfile.goals) 
-      ? userProfile.goals.filter(Boolean).join(', ') 
-      : (userProfile.goals || 'achieving career excellence');
+      ? userProfile.goals.map(sanitizeTrait).filter(Boolean).join(', ') 
+      : sanitizeTrait(userProfile.goals);
+    const userBio = sanitizeTrait(userProfile.bio);
+    const userInterests = Array.isArray(userProfile.interests)
+      ? userProfile.interests.map(sanitizeTrait).filter(Boolean).join(', ')
+      : sanitizeTrait(userProfile.interests);
 
     const userContextData = JSON.stringify({
-      name: userProfile.name || 'Friend',
-      occupation: userProfile.occupation,
-      goals: userProfile.goals,
-      bio: userProfile.bio,
-      interests: userProfile.interests,
-      recentCompletedTasks: tasks.filter(t => t.status === 'completed').slice(-5).map(t => t.title),
-      activeProjects: tasks.filter(t => t.status !== 'completed').slice(-5).map(t => t.title)
+      name: userName,
+      occupation: userOccupation || undefined,
+      goals: userGoals || undefined,
+      bio: userBio || undefined,
+      interests: userInterests || undefined,
+      recentCompletedTasks: tasks.filter(t => t.status === 'completed').slice(-5).map(t => sanitizeTrait(t.title)),
+      activeProjects: tasks.filter(t => t.status !== 'completed').slice(-5).map(t => sanitizeTrait(t.title))
     }, null, 2);
 
-    // Dynamic generic fallback wish tailored using template literals
-    const fallbackWish = `Happy Birthday, ${userName}! May this year bring extraordinary breakthroughs and milestone achievements in ${userOccupation}. May every project and habit move you closer to your goals of ${userGoals}. Wishing you health, boundless energy, and continuous success! — From your Autonomous Assistant, SyncMate ⚡`;
+    // Dynamic fallback wish using natural phrasing without raw template blanks or first-person clutter
+    const fallbackDomain = userOccupation ? `in ${userOccupation}` : 'in all your ambitious pursuits';
+    const fallbackGoalText = userGoals ? `closer to your goals of ${userGoals}` : 'closer to your growth and success';
+    const fallbackWish = `Happy Birthday, ${userName}! May this year bring extraordinary breakthroughs and milestone achievements ${fallbackDomain}. May every project and habit move you ${fallbackGoalText}. Wishing you health, boundless energy, and continuous success! — From your Autonomous Assistant, SyncMate ⚡`;
 
-    const aiPrompt = `Act as an elite Autonomous Assistant and Master Metaphor Weaver for SyncMate.
+    const aiPrompt = `You are SyncMate's warm, witty, and inspiring AI Assistant. Craft an inspiring, personalized birthday message for ${userName}.
 
-Analyze the following raw user profile and activity JSON data:
+User Context Traits (Degree, Occupation, Goals, Bio, Passions, Recent Tasks):
 ${userContextData}
 
-YOUR TASK:
-1. Deeply analyze the user's field, occupation, bio, goals, and recent activity in the app.
-2. Identify their unique domain, core passions, and personal identity from the raw data.
-3. Synthesize a powerful 3-to-4 sentence birthday reflection built around an original, creative domain metaphor intrinsic to their specific background and pursuits. Bridge their real-world domain with their daily progress and ambitions.
-4. Avoid all generic birthday clichés. Make every word feel bespoke and deeply connected to their mind and actions.
-5. Signature: End with "— From your Autonomous Assistant, SyncMate ⚡". Do NOT wrap output in quotes or markdown headers.`;
+STRICT WRITING RULES:
+1. READ TRAITS AS CONTEXT ONLY: Treat degree, roles, occupation, goals, bio, and passions as contextual background only. DO NOT paste raw trait strings verbatim into template blanks or output raw key-value labels.
+2. NATURAL PROSE: Smoothly weave their background into natural, fluid English (for example, transform 'BS Biotechnology Student' into 'your journey in Biotechnology', and 'I'm vibe coder' or 'vibe coder' into 'your creative coding projects').
+3. ORIGINAL METAPHOR: Connect their field, goals, and daily progress into an original, inspiring metaphor intrinsic to their specific background and pursuits.
+4. LENGTH & TONE: Keep the overall length strictly between 50 to 80 words. Tone should be warm, energetic, encouraging, and professional. Avoid generic birthday clichés.
+5. SIGNATURE: Conclude with "— From your Autonomous Assistant, SyncMate ⚡". Do NOT wrap output in quotes or markdown headers.`;
 
     try {
       // Direct client-side call to Gemini engine passing profile context
