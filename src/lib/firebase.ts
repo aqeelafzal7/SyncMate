@@ -27,7 +27,7 @@ import {
 import { UserProfile, Task, Project, WardrobeItem, StyleLog, MyLookReport, SubscriptionRequest } from '../types';
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyDSaP14gCiA6N9ZwTKYLchhh4Frwdr6mz0",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: "syncmate-a.firebaseapp.com",
   projectId: "syncmate-a",
   storageBucket: "syncmate-a.firebasestorage.app",
